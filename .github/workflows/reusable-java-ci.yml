@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '23'
+          java-version: '26'
 
       - name: Make Gradle Wrapper Executable
         run: chmod +x ${{ inputs.service_path }}/gradlew
