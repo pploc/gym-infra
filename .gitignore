@@ -13,6 +13,7 @@ out/
 .gradle-home/
 *.class
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 
 # IDE & OS
 .idea/
