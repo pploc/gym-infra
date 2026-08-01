@@ -1,0 +1,32 @@
+name: Reusable Helm Deploy
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+        default: 'staging'
+      image_tag:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Execute Helm Upgrade Dry-Run
+        run: |
+          helm upgrade --install ${{ inputs.service_name }} ./helm/gym-service \
+            --namespace gym-${{ inputs.environment }} \
+            --create-namespace \
+            --set image.tag=${{ inputs.image_tag }} \
+            --dry-run
