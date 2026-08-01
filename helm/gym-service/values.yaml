@@ -1,0 +1,42 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/pploc/gym-service
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  grpcPort: 50051
+  httpPort: 8080
+  metricsPort: 9090
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: api.gym.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+env:
+  - name: ENV
+    value: "production"
+
+secrets: {}

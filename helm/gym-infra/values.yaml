@@ -1,0 +1,25 @@
+postgres:
+  enabled: true
+  replicas: 1
+  image: postgres:16
+  password: "postgres-password"
+
+kafka:
+  enabled: true
+  replicas: 1
+  image: confluentinc/cp-kafka:7.6.0
+
+redis:
+  enabled: true
+  replicas: 1
+  image: redis:7-alpine
+
+cassandra:
+  enabled: true
+  replicas: 1
+  image: cassandra:4.1
+
+yugabyte:
+  enabled: true
+  replicas: 1
+  image: yugabytedb/yugabyte:2.20-latest

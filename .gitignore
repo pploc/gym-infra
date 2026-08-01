@@ -1,0 +1,22 @@
+# Git ignore for gym-infra
+
+# Go
+bin/
+*.out
+*.log
+vendor/
+
+# Java / Gradle
+.gradle/
+build/
+out/
+.gradle-home/
+*.class
+*.jar
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+*.tmp

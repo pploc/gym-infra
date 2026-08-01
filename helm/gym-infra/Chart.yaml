@@ -1,0 +1,6 @@
+apiVersion: v2
+name: gym-infra
+description: Local infrastructure components for Gym Chain microservices
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

@@ -1,0 +1,135 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ develop, main ]
+  pull_request:
+    branches: [ develop, main ]
+
+jobs:
+  go-ci:
+    name: Go Unit & Integration Tests (Coverage >= 95%)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run Go Unit and Integration Tests
+        run: |
+          cd services/go-service
+          go test -v -coverprofile=coverage.out ./...
+
+      - name: Verify Go Coverage (>= 95%)
+        run: |
+          cd services/go-service
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Go Total Coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE < 95.0" | bc -l) )); then
+            echo "ERROR: Go Coverage ${COVERAGE}% is below required 95.0% threshold"
+            exit 1
+          fi
+
+  java-ci:
+    name: Java Unit & Integration Tests (Coverage >= 95%)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '23'
+
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x services/java-service/gradlew
+
+      - name: Run Java Unit, Integration Tests & JaCoCo Verification
+        run: |
+          cd services/java-service
+          ./gradlew check jacocoTestReport jacocoTestCoverageVerification
+
+  helm-ci:
+    name: Helm Chart Lint & Template Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Helm Lint Charts
+        run: |
+          helm lint helm/gym-service
+          helm lint helm/gym-infra
+
+      - name: Helm Template Validation
+        run: |
+          helm template test-service helm/gym-service
+          helm template test-infra helm/gym-infra
+
+  docker-build-push:
+    name: Build & Push Docker Images to Container Registry
+    needs: [go-ci, java-ci, helm-ci]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (ghcr.io)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Go Service Image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/go-service
+          file: services/go-service/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/go-service:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/go-service:latest
+
+      - name: Build and Push Java Service Image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/java-service
+          file: services/java-service/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/java-service:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/java-service:latest
+
+  helm-k8s-deploy-check:
+    name: K8s Helm Action Dry-Run Deployment
+    needs: [docker-build-push]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Execute Helm K8s Upgrade Dry-Run
+        run: |
+          helm upgrade --install gym-service helm/gym-service --dry-run
+          helm upgrade --install gym-infra helm/gym-infra --dry-run
