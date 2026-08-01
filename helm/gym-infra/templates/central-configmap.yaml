@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gym-central-config
+  namespace: {{ .Release.Namespace | default "default" }}
+  labels:
+    app.kubernetes.io/name: gym-central-config
+    app.kubernetes.io/managed-by: Helm
+data:
+  POSTGRES_HOST: {{ .Values.postgres.host | default "postgres.gym-system.svc.cluster.local" | quote }}
+  POSTGRES_PORT: {{ .Values.postgres.port | default "5432" | quote }}
+  KAFKA_BROKERS: {{ .Values.kafka.brokers | default "kafka.gym-system.svc.cluster.local:9092" | quote }}
+  REDIS_HOST: {{ .Values.redis.host | default "redis.gym-system.svc.cluster.local" | quote }}
+  REDIS_PORT: {{ .Values.redis.port | default "6379" | quote }}
+  CASSANDRA_HOST: {{ .Values.cassandra.host | default "cassandra.gym-system.svc.cluster.local" | quote }}
+  CASSANDRA_PORT: {{ .Values.cassandra.port | default "9042" | quote }}
+  YUGABYTE_HOST: {{ .Values.yugabyte.host | default "yugabyte.gym-system.svc.cluster.local" | quote }}
+  YUGABYTE_PORT: {{ .Values.yugabyte.port | default "5433" | quote }}
+  SCHEMA_REGISTRY_URL: {{ .Values.schemaRegistry.url | default "http://schema-registry.gym-system.svc.cluster.local:8081" | quote }}
+  KONG_GATEWAY_URL: {{ .Values.kong.gatewayUrl | default "http://kong-gateway.gym-system.svc.cluster.local:8000" | quote }}
+  LOG_LEVEL: "INFO"
+  JWT_ISSUER: "gym-identifier"
+  JWT_AUDIENCE: "gym-services"

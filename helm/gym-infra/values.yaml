@@ -3,23 +3,38 @@ postgres:
   replicas: 1
   image: postgres:16
   password: "postgres-password"
+  host: postgres.gym-system.svc.cluster.local
+  port: 5432
 
 kafka:
   enabled: true
   replicas: 1
   image: confluentinc/cp-kafka:7.6.0
+  brokers: kafka.gym-system.svc.cluster.local:9092
 
 redis:
   enabled: true
   replicas: 1
   image: redis:7-alpine
+  host: redis.gym-system.svc.cluster.local
+  port: 6379
 
 cassandra:
   enabled: true
   replicas: 1
   image: cassandra:4.1
+  host: cassandra.gym-system.svc.cluster.local
+  port: 9042
 
 yugabyte:
   enabled: true
   replicas: 1
   image: yugabytedb/yugabyte:2.20-latest
+  host: yugabyte.gym-system.svc.cluster.local
+  port: 5433
+
+schemaRegistry:
+  url: http://schema-registry.gym-system.svc.cluster.local:8081
+
+kong:
+  gatewayUrl: http://kong-gateway.gym-system.svc.cluster.local:8000

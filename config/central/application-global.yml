@@ -1,0 +1,25 @@
+# Centralized Spring Boot Configuration for Gym Chain Microservices
+gym:
+  central:
+    environment: ${ENV:production}
+    log-level: ${LOG_LEVEL:INFO}
+    database:
+      postgres:
+        host: ${POSTGRES_HOST:postgres.gym-system.svc.cluster.local}
+        port: ${POSTGRES_PORT:5432}
+      yugabyte:
+        host: ${YUGABYTE_HOST:yugabyte.gym-system.svc.cluster.local}
+        port: ${YUGABYTE_PORT:5433}
+      cassandra:
+        host: ${CASSANDRA_HOST:cassandra.gym-system.svc.cluster.local}
+        port: ${CASSANDRA_PORT:9042}
+    kafka:
+      bootstrap-servers: ${KAFKA_BROKERS:kafka.gym-system.svc.cluster.local:9092}
+      schema-registry-url: ${SCHEMA_REGISTRY_URL:http://schema-registry.gym-system.svc.cluster.local:8081}
+    redis:
+      host: ${REDIS_HOST:redis.gym-system.svc.cluster.local}
+      port: ${REDIS_PORT:6379}
+    security:
+      jwt:
+        issuer: ${JWT_ISSUER:gym-identifier}
+        audience: ${JWT_AUDIENCE:gym-services}

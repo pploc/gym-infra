@@ -11,6 +11,10 @@ service:
   httpPort: 8080
   metricsPort: 9090
 
+config:
+  logLevel: "INFO"
+  extraData: {}
+
 resources:
   limits:
     cpu: 1000m
