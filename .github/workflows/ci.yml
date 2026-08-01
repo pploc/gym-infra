@@ -17,7 +17,7 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@v4
 
-      - name: Helm Lint Charts
+      - name: Run Helm Lint
         run: |
           helm lint helm/gym-service
           helm lint helm/gym-infra
@@ -26,6 +26,35 @@ jobs:
         run: |
           helm template test-service helm/gym-service
           helm template test-infra helm/gym-infra
+
+  code-lint:
+    name: Code Linting & Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run Go Vet & Code Lint
+        run: |
+          cd services/go-service
+          go vet ./...
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '26'
+
+      - name: Run Java Code Lint
+        run: |
+          cd services/java-service
+          chmod +x gradlew
+          ./gradlew compileJava compileTestJava
 
   config-validate:
     name: Validate Central Configurations
