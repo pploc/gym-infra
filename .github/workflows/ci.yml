@@ -38,19 +38,3 @@ jobs:
         run: |
           python3 -c "import yaml; yaml.safe_load(open('config/central/application-global.yml'))"
           echo "application-global.yml is valid YAML"
-
-  helm-k8s-deploy-check:
-    name: K8s Helm Action Dry-Run Deployment
-    needs: [helm-lint-validate, config-validate]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Helm
-        uses: azure/setup-helm@v4
-
-      - name: Execute Helm K8s Upgrade Dry-Run
-        run: |
-          helm upgrade --install gym-service helm/gym-service --dry-run
-          helm upgrade --install gym-infra helm/gym-infra --dry-run

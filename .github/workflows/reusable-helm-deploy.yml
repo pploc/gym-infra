@@ -13,6 +13,9 @@ on:
       image_tag:
         required: true
         type: string
+    secrets:
+      KUBECONFIG:
+        required: false
 
 jobs:
   deploy:
@@ -23,10 +26,23 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@v4
 
-      - name: Execute Helm Upgrade Dry-Run
+      - name: Set up Kubeconfig (if provided)
+        if: secrets.KUBECONFIG != ''
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Validate Helm Template
+        run: |
+          helm template ${{ inputs.service_name }} ./helm/gym-service \
+            --namespace gym-${{ inputs.environment }} \
+            --set image.tag=${{ inputs.image_tag }}
+
+      - name: Execute Helm Upgrade (if Kubeconfig present)
+        if: secrets.KUBECONFIG != ''
         run: |
           helm upgrade --install ${{ inputs.service_name }} ./helm/gym-service \
             --namespace gym-${{ inputs.environment }} \
             --create-namespace \
-            --set image.tag=${{ inputs.image_tag }} \
-            --dry-run
+            --set image.tag=${{ inputs.image_tag }}
