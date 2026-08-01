@@ -10,7 +10,7 @@ on:
 
 jobs:
   go-test:
-    name: Go Lint, Unit & Integration Tests (Coverage >= 95%)
+    name: Go Lint (golangci-lint), Unit & Integration Tests (Coverage >= 95%)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,10 +20,16 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Run Go Code Lint (go vet)
+      - name: Run Go Vet
         run: |
           cd ${{ inputs.service_path }}
           go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.59.1
+          working-directory: ${{ inputs.service_path }}
 
       - name: Run Go Unit and Integration Tests
         run: |

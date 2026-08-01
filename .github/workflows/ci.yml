@@ -28,7 +28,7 @@ jobs:
           helm template test-infra helm/gym-infra
 
   code-lint:
-    name: Code Linting (Go vet & Java Spotless)
+    name: Code Linting (golangci-lint & Java Spotless)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -39,10 +39,16 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Run Go Vet & Code Lint
+      - name: Run Go Vet
         run: |
           cd services/go-service
           go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.59.1
+          working-directory: services/go-service
 
       - name: Setup Java
         uses: actions/setup-java@v4
