@@ -25,6 +25,8 @@ jobs:
         run: chmod +x ${{ inputs.service_path }}/gradlew
 
       - name: Run Gradle Check & JaCoCo Verification
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd ${{ inputs.service_path }}
           ./gradlew check jacocoTestReport jacocoTestCoverageVerification
