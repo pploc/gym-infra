@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'application'
     id 'jacoco'
+    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 group = 'com.gym.infra'
@@ -20,6 +21,15 @@ dependencies {
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(26)
+    }
+}
+
+spotless {
+    java {
+        target 'src/*/java/**/*.java'
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
     }
 }
 

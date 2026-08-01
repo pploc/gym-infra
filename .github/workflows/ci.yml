@@ -28,7 +28,7 @@ jobs:
           helm template test-infra helm/gym-infra
 
   code-lint:
-    name: Code Linting & Static Analysis
+    name: Code Linting (Go vet & Java Spotless)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -50,11 +50,11 @@ jobs:
           distribution: 'temurin'
           java-version: '26'
 
-      - name: Run Java Code Lint
+      - name: Run Java Spotless Lint Check
         run: |
           cd services/java-service
           chmod +x gradlew
-          ./gradlew compileJava compileTestJava
+          ./gradlew spotlessCheck
 
   config-validate:
     name: Validate Central Configurations

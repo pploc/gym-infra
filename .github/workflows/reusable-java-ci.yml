@@ -10,7 +10,7 @@ on:
 
 jobs:
   java-test:
-    name: Java Lint, Unit & Integration Tests (Coverage >= 95%)
+    name: Java Lint (Spotless), Unit & Integration Tests (Coverage >= 95%)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,10 +24,10 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x ${{ inputs.service_path }}/gradlew
 
-      - name: Run Java Code Lint
+      - name: Run Java Spotless Code Lint Check
         run: |
           cd ${{ inputs.service_path }}
-          ./gradlew compileJava compileTestJava
+          ./gradlew spotlessCheck
 
       - name: Run Gradle Check & JaCoCo Verification
         run: |
