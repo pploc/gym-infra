@@ -44,3 +44,21 @@ env:
     value: "production"
 
 secrets: {}
+
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-checkin
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-notification
+      ports:
+        - protocol: TCP
+          port: 50051
+
