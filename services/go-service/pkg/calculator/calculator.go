@@ -1,3 +1,4 @@
+// Package calculator is a tiny domain sample for gym-infra Go CI smoke tests.
 package calculator
 
 import (

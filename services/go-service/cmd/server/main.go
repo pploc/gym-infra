@@ -1,3 +1,4 @@
+// Package main is the sample Go service entrypoint used by gym-infra CI.
 package main
 
 import (
