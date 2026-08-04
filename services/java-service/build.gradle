@@ -8,6 +8,11 @@ plugins {
 group = 'com.gym.infra'
 version = '1.0.0'
 
+// Java 26 class files need JaCoCo ≥ 0.8.13
+jacoco {
+    toolVersion = '0.8.14'
+}
+
 repositories {
     mavenCentral()
 }

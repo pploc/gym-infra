@@ -22,12 +22,22 @@ Create a default fully qualified app name.
 {{- end }}
 
 {{/*
+Create the name of the service account to use.
+*/}}
+{{- define "gym-service.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create }}
+{{- default (include "gym-service.fullname" .) .Values.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
 Common labels
 */}}
 {{- define "gym-service.labels" -}}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
-app.kubernetes.io/name: {{ include "gym-service.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
+{{ include "gym-service.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}

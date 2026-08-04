@@ -1,0 +1,55 @@
+name: Java CI
+
+on:
+  workflow_call:
+    inputs:
+      service_path:
+        description: Path to Gradle project root
+        required: false
+        type: string
+        default: '.'
+      java_version:
+        description: JDK version
+        required: false
+        type: string
+        default: '26'
+      gradle_args:
+        description: Gradle tasks (default check = spotless + test + jacoco gate)
+        required: false
+        type: string
+        default: 'check'
+    secrets:
+      READ_PACKAGES_TOKEN:
+        description: Optional token for private GitHub Packages (falls back to GITHUB_TOKEN)
+        required: false
+
+jobs:
+  java-test:
+    name: Lint, Unit & Coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.service_path }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java_version }}
+          cache: gradle
+          cache-dependency-path: ${{ inputs.service_path }}/**/build.gradle*
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Gradle ${{ inputs.gradle_args }}
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.READ_PACKAGES_TOKEN || github.token }}
+          READ_PACKAGES_TOKEN: ${{ secrets.READ_PACKAGES_TOKEN || github.token }}
+        run: ./gradlew ${{ inputs.gradle_args }} --no-daemon

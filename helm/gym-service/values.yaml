@@ -1,9 +1,40 @@
+# Generic microservice chart — override per service via -f values-<service>.yaml
+
 replicaCount: 2
+
+nameOverride: ""
+fullnameOverride: ""
 
 image:
   repository: ghcr.io/pploc/gym-service
   pullPolicy: IfNotPresent
-  tag: "latest"
+  # Prefer immutable tags (:sha) in real deploys; override via --set image.tag=
+  tag: "develop"
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automount: false
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false # Java/Spring often needs writable tmp; set true for static Go bins
+  capabilities:
+    drop:
+      - ALL
 
 service:
   type: ClusterIP
@@ -14,6 +45,32 @@ service:
 config:
   logLevel: "INFO"
   extraData: {}
+
+# HTTP probes (Spring Actuator defaults). Override paths for Go (/healthz).
+probes:
+  enabled: true
+  liveness:
+    path: /actuator/health/liveness
+    port: http
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    path: /actuator/health/readiness
+    port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+  startup:
+    enabled: true
+    path: /actuator/health/liveness
+    port: http
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
 
 resources:
   limits:
@@ -28,9 +85,17 @@ autoscaling:
   minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: null
 
-ingress:
+podDisruptionBudget:
   enabled: true
+  minAvailable: 1
+
+topologySpreadConstraints: []
+
+# Classic nginx Ingress — disabled when Istio is the north-south entry
+ingress:
+  enabled: false
   className: "nginx"
   annotations: {}
   hosts:
@@ -38,10 +103,45 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+  tls: []
+
+# Istio mesh + optional Gateway attachment (shared chart; enable per install)
+istio:
+  enabled: true
+  inject: true
+  # Create Gateway in this release only when true (usually one shared Gateway)
+  gateway:
+    create: false
+    name: gym-gateway
+    selector:
+      istio: ingressgateway
+    hosts:
+      - api.gym.local
+    # HTTP only for local; add tls later
+    port: 80
+  virtualService:
+    enabled: true
+    # Gateway resource name(s) to attach; same namespace unless fully qualified
+    gateways:
+      - gym-gateway
+    hosts:
+      - api.gym.local
+    # HTTP match prefix → service HTTP port
+    prefix: /
+  destinationRule:
+    enabled: true
+    tlsMode: ISTIO_MUTUAL
+  peerAuthentication:
+    enabled: true
+    mtlsMode: STRICT
 
 env:
   - name: ENV
     value: "production"
+
+# Extra volume mounts (e.g. emptyDir /tmp when readOnlyRootFilesystem=true)
+volumeMounts: []
+volumes: []
 
 secrets: {}
 
@@ -49,16 +149,20 @@ networkPolicy:
   enabled: true
   ingress:
     - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes: istio-system
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: ms-gym-gateway
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: ms-gym-checkin
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: ms-gym-notification
+              istio: ingressgateway
       ports:
         - protocol: TCP
+          port: 8080
+        - protocol: TCP
           port: 50051
-

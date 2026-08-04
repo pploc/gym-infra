@@ -1,0 +1,20 @@
+{{- if and .Values.istio.enabled .Values.istio.gateway.create }}
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.istio.gateway.name }}
+  labels:
+    {{- include "gym-service.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- toYaml .Values.istio.gateway.selector | nindent 4 }}
+  servers:
+    - port:
+        number: {{ .Values.istio.gateway.port }}
+        name: http
+        protocol: HTTP
+      hosts:
+        {{- range .Values.istio.gateway.hosts }}
+        - {{ . | quote }}
+        {{- end }}
+{{- end }}

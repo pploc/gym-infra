@@ -1,0 +1,13 @@
+{{- if and .Values.istio.enabled .Values.istio.destinationRule.enabled }}
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: {{ include "gym-service.fullname" . }}
+  labels:
+    {{- include "gym-service.labels" . | nindent 4 }}
+spec:
+  host: {{ include "gym-service.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: {{ .Values.istio.destinationRule.tlsMode }}
+{{- end }}

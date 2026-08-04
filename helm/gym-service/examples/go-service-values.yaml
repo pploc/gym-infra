@@ -1,0 +1,38 @@
+# Example overlay for a Go service (health path differs from Spring).
+nameOverride: go-service
+
+image:
+  repository: ghcr.io/pploc/go-service
+  tag: develop
+
+probes:
+  enabled: true
+  liveness:
+    path: /healthz
+  readiness:
+    path: /healthz
+  startup:
+    enabled: true
+    path: /healthz
+
+securityContext:
+  readOnlyRootFilesystem: true
+
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
+volumes:
+  - name: tmp
+    emptyDir: {}
+
+istio:
+  enabled: true
+  gateway:
+    create: false
+  virtualService:
+    hosts:
+      - api.gym.local
+    prefix: /go/
+
+ingress:
+  enabled: false

@@ -1,0 +1,158 @@
+name: Docker Build & Push
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: Logical service name (used in image path)
+        required: true
+        type: string
+      context:
+        description: Docker build context path
+        required: false
+        type: string
+        default: '.'
+      dockerfile:
+        description: Dockerfile path relative to repo root
+        required: false
+        type: string
+        default: ''
+      image_name:
+        description: Image name under registry/owner (defaults to service_name)
+        required: false
+        type: string
+        default: ''
+      registry:
+        description: Container registry host
+        required: false
+        type: string
+        default: 'ghcr.io'
+      push:
+        description: Push image to registry
+        required: false
+        type: boolean
+        default: true
+      max_tags:
+        description: Keep at most this many package versions (prune oldest)
+        required: false
+        type: number
+        default: 20
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # needed to delete old GHCR versions when pruning
+      # (org may still require package admin for delete)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE_NAME="${{ inputs.image_name }}"
+          if [[ -z "$IMAGE_NAME" ]]; then
+            IMAGE_NAME="${{ inputs.service_name }}"
+          fi
+          OWNER="${{ github.repository_owner }}"
+          OWNER_LC="${OWNER,,}"
+          REGISTRY="${{ inputs.registry }}"
+          IMAGE="${REGISTRY}/${OWNER_LC}/${IMAGE_NAME}"
+
+          REF_NAME="${GITHUB_REF_NAME}"
+          # docker tag safe: lowercase, replace / with -
+          REF_TAG=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]' | sed 's|/|-|g' | sed 's/[^a-z0-9._-]/-/g')
+          SHA_TAG="${GITHUB_SHA}"
+
+          TAGS="${IMAGE}:${SHA_TAG},${IMAGE}:${REF_TAG}"
+          if [[ "$REF_NAME" == "develop" || "$REF_NAME" == "main" ]]; then
+            TAGS="${TAGS},${IMAGE}:latest"
+          fi
+
+          DOCKERFILE="${{ inputs.dockerfile }}"
+          if [[ -z "$DOCKERFILE" ]]; then
+            DOCKERFILE="${{ inputs.context }}/Dockerfile"
+          fi
+
+          {
+            echo "image=${IMAGE}"
+            echo "tags=${TAGS}"
+            echo "dockerfile=${DOCKERFILE}"
+            echo "package_name=${IMAGE_NAME}"
+            echo "owner_lc=${OWNER_LC}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Image: ${IMAGE}"
+          echo "Tags: ${TAGS}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to container registry
+        if: inputs.push
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ steps.meta.outputs.dockerfile }}
+          push: ${{ inputs.push }}
+          build-args: |
+            GITHUB_ACTOR=${{ github.actor }}
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Prune old package versions (keep max ${{ inputs.max_tags }})
+        if: inputs.push
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ steps.meta.outputs.owner_lc }}
+          PACKAGE: ${{ steps.meta.outputs.package_name }}
+          MAX_TAGS: ${{ inputs.max_tags }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # List container package versions newest first; delete beyond MAX_TAGS.
+          # Soft-fail: package delete often needs admin; do not fail the build.
+          mapfile -t IDS < <(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/users/${OWNER}/packages/container/${PACKAGE}/versions?per_page=100" \
+            --jq '.[].id' 2>/dev/null || true)
+
+          if [[ ${#IDS[@]} -eq 0 ]]; then
+            # try org endpoint
+            mapfile -t IDS < <(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/orgs/${OWNER}/packages/container/${PACKAGE}/versions?per_page=100" \
+              --jq '.[].id' 2>/dev/null || true)
+          fi
+
+          COUNT=${#IDS[@]}
+          echo "Found ${COUNT} package versions for ${OWNER}/${PACKAGE}"
+          if (( COUNT <= MAX_TAGS )); then
+            echo "Within limit ${MAX_TAGS}; nothing to prune"
+            exit 0
+          fi
+
+          for (( i=MAX_TAGS; i<COUNT; i++ )); do
+            ID="${IDS[$i]}"
+            echo "Deleting package version id=${ID}"
+            gh api --method DELETE \
+              -H "Accept: application/vnd.github+json" \
+              "/users/${OWNER}/packages/container/${PACKAGE}/versions/${ID}" \
+              || gh api --method DELETE \
+              -H "Accept: application/vnd.github+json" \
+              "/orgs/${OWNER}/packages/container/${PACKAGE}/versions/${ID}" \
+              || echo "WARN: could not delete version ${ID} (permissions?)"
+          done

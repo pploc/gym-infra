@@ -1,0 +1,55 @@
+name: Helm Validate
+
+on:
+  workflow_call:
+    inputs:
+      chart_path:
+        description: Path to Helm chart
+        required: false
+        type: string
+        default: 'helm/gym-service'
+      release_name:
+        description: Release name for helm template
+        required: false
+        type: string
+        default: 'test'
+      values_file:
+        description: Optional values file path
+        required: false
+        type: string
+        default: ''
+      set_args:
+        description: Extra --set arguments (space-separated pairs key=value)
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  validate:
+    name: Helm lint & template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Helm lint
+        run: helm lint ${{ inputs.chart_path }}
+
+      - name: Helm template
+        run: |
+          set -euo pipefail
+          ARGS=(template "${{ inputs.release_name }}" "${{ inputs.chart_path }}")
+          if [[ -n "${{ inputs.values_file }}" ]]; then
+            ARGS+=(-f "${{ inputs.values_file }}")
+          fi
+          if [[ -n "${{ inputs.set_args }}" ]]; then
+            # shellcheck disable=SC2206
+            SETS=(${{ inputs.set_args }})
+            for s in "${SETS[@]}"; do
+              ARGS+=(--set "$s")
+            done
+          fi
+          helm "${ARGS[@]}" >/dev/null
+          echo "helm template OK"

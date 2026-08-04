@@ -1,0 +1,26 @@
+{{- if and .Values.istio.enabled .Values.istio.virtualService.enabled }}
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ include "gym-service.fullname" . }}
+  labels:
+    {{- include "gym-service.labels" . | nindent 4 }}
+spec:
+  hosts:
+    {{- range .Values.istio.virtualService.hosts }}
+    - {{ . | quote }}
+    {{- end }}
+  gateways:
+    {{- range .Values.istio.virtualService.gateways }}
+    - {{ . }}
+    {{- end }}
+  http:
+    - match:
+        - uri:
+            prefix: {{ .Values.istio.virtualService.prefix | quote }}
+      route:
+        - destination:
+            host: {{ include "gym-service.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+            port:
+              number: {{ .Values.service.httpPort }}
+{{- end }}

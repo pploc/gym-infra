@@ -1,75 +1,110 @@
-name: Infrastructure CI/CD Pipeline
+name: Infrastructure CI
 
 on:
   push:
-    branches: [ develop, main ]
+    branches: [develop, main, 'feature/**', 'hotfix/**']
   pull_request:
-    branches: [ develop, main ]
+    branches: [develop, main]
+
+permissions:
+  contents: read
+  packages: read
 
 jobs:
-  helm-lint-validate:
-    name: Helm Chart Lint & Template Validation
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  helm-service-istio-on:
+    name: Helm gym-service (Istio on)
+    uses: ./.github/workflows/helm-validate.yml
+    with:
+      chart_path: helm/gym-service
+      release_name: gym-service
+      set_args: istio.enabled=true ingress.enabled=false
 
-      - name: Setup Helm
-        uses: azure/setup-helm@v4
+  helm-service-istio-off:
+    name: Helm gym-service (nginx Ingress)
+    uses: ./.github/workflows/helm-validate.yml
+    with:
+      chart_path: helm/gym-service
+      release_name: gym-service
+      set_args: istio.enabled=false ingress.enabled=true
 
-      - name: Run Helm Lint
-        run: |
-          helm lint helm/gym-service
-          helm lint helm/gym-infra
+  helm-service-member-example:
+    name: Helm gym-service member example
+    uses: ./.github/workflows/helm-validate.yml
+    with:
+      chart_path: helm/gym-service
+      release_name: ms-gym-member
+      values_file: helm/gym-service/examples/ms-gym-member-values.yaml
 
-      - name: Helm Template Validation
-        run: |
-          helm template test-service helm/gym-service
-          helm template test-infra helm/gym-infra
+  helm-infra:
+    name: Helm gym-infra
+    uses: ./.github/workflows/helm-validate.yml
+    with:
+      chart_path: helm/gym-infra
+      release_name: gym-infra
 
-  code-lint:
-    name: Code Linting (golangci-lint & Java Spotless)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  go-sample:
+    name: Go sample service
+    uses: ./.github/workflows/go-ci.yml
+    with:
+      service_path: services/go-service
+      go_version: '1.22.x'
+      coverage_min: '95'
+      golangci_version: v1.59.1
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Run Go Vet
-        run: |
-          cd services/go-service
-          go vet ./...
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.59.1
-          working-directory: services/go-service
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '26'
-
-      - name: Run Java Spotless Lint Check
-        run: |
-          cd services/java-service
-          chmod +x gradlew
-          ./gradlew spotlessCheck
+  java-sample:
+    name: Java sample service
+    uses: ./.github/workflows/java-ci.yml
+    with:
+      service_path: services/java-service
+      java_version: '26'
+      gradle_args: check
 
   config-validate:
-    name: Validate Central Configurations
+    name: Central config YAML
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Validate YAML files
+      - uses: actions/checkout@v4
+      - name: Validate YAML
         run: |
           python3 -c "import yaml; yaml.safe_load(open('config/central/application-global.yml'))"
-          echo "application-global.yml is valid YAML"
+          echo "application-global.yml valid"
+
+  docker-go-sample:
+    name: Docker go-service (push on branch)
+    needs: [go-sample]
+    if: >
+      github.event_name == 'push' && (
+        github.ref == 'refs/heads/develop' ||
+        github.ref == 'refs/heads/main' ||
+        startsWith(github.ref, 'refs/heads/feature/') ||
+        startsWith(github.ref, 'refs/heads/hotfix/')
+      )
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      service_name: go-service
+      context: services/go-service
+      push: true
+      max_tags: 20
+    permissions:
+      contents: read
+      packages: write
+
+  docker-java-sample:
+    name: Docker java-service (push on branch)
+    needs: [java-sample]
+    if: >
+      github.event_name == 'push' && (
+        github.ref == 'refs/heads/develop' ||
+        github.ref == 'refs/heads/main' ||
+        startsWith(github.ref, 'refs/heads/feature/') ||
+        startsWith(github.ref, 'refs/heads/hotfix/')
+      )
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      service_name: java-service
+      context: services/java-service
+      push: true
+      max_tags: 20
+    permissions:
+      contents: read
+      packages: write

@@ -1,0 +1,38 @@
+# Example overlay for ms-gym-member using the shared gym-service chart.
+# helm upgrade --install ms-gym-member ./helm/gym-service -f examples/ms-gym-member-values.yaml -n gym-system
+
+nameOverride: ms-gym-member
+
+image:
+  repository: ghcr.io/pploc/ms-gym-member
+  tag: develop
+
+probes:
+  enabled: true
+  liveness:
+    path: /actuator/health/liveness
+  readiness:
+    path: /actuator/health/readiness
+
+istio:
+  enabled: true
+  inject: true
+  gateway:
+    create: true # local single-service demo; shared gateway in multi-service cluster
+    name: gym-gateway
+    hosts:
+      - member.gym.local
+  virtualService:
+    enabled: true
+    gateways:
+      - gym-gateway
+    hosts:
+      - member.gym.local
+    prefix: /
+
+ingress:
+  enabled: false
+
+env:
+  - name: ENV
+    value: "local"
