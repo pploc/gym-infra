@@ -1,0 +1,23 @@
+{
+  "headers": {
+    "Accept-Encoding": "gzip",
+    "Authorization": "Bearer \u003credacted\u003e",
+    "Connection": "keep-alive",
+    "Traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+    "User-Agent": "Go-http-client/1.1",
+    "Via": "1.1 kong/3.8.0",
+    "X-Forwarded-For": "192.168.143.2",
+    "X-Forwarded-Host": "localhost",
+    "X-Forwarded-Path": "/v1/auth/me",
+    "X-Forwarded-Port": "8000",
+    "X-Forwarded-Proto": "http",
+    "X-Gym-Id": "gym-evidence",
+    "X-Kong-Request-Id": "b74b9555b8a9b330a13f664af8a58f29",
+    "X-Membership-Status": "NONE",
+    "X-Real-Ip": "192.168.143.2",
+    "X-User-Id": "user-evidence",
+    "X-User-Role": "CUSTOMER"
+  },
+  "method": "GET",
+  "path": "/v1/auth/me"
+}

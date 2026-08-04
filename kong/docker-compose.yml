@@ -1,0 +1,40 @@
+services:
+  mock-upstream:
+    build:
+      context: ./mock-upstream
+    image: gym-mock-upstream:local
+    container_name: gym-mock-upstream
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/health || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  kong:
+    image: kong:3.8-ubuntu
+    container_name: gym-kong
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_PLUGINS: bundled,gym-jwt-claims
+      KONG_LUA_PACKAGE_PATH: /opt/?.lua;/opt/?/init.lua;;
+    volumes:
+      - ./kong.yml:/usr/local/kong/declarative/kong.yml:ro
+      - ./plugins/gym-jwt-claims:/opt/kong/plugins/gym-jwt-claims:ro
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    depends_on:
+      mock-upstream:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kong health || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
