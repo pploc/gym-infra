@@ -184,7 +184,7 @@ func equalFold(a, b string) bool {
 }
 
 func TestPublicRoutesPassWithoutTokenAndStripHeaders(t *testing.T) {
-	status, cap, _ := doRequest(t, http.MethodPost, "/v1/auth/login", map[string]string{
+	status, cap, _ := doRequest(t, http.MethodPost, "/api/v1/auth/login", map[string]string{
 		"x-user-id":            "hacker-123",
 		"x-user-role":          "SUPER_ADMIN",
 		"x-gym-id":             "hacker-gym",
@@ -202,7 +202,7 @@ func TestPublicRoutesPassWithoutTokenAndStripHeaders(t *testing.T) {
 }
 
 func TestProtectedRouteRejectsMissingToken(t *testing.T) {
-	status, _, _ := doRequest(t, http.MethodGet, "/v1/auth/me", nil, nil)
+	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", nil, nil)
 	if status != 401 {
 		t.Fatalf("status=%d want 401", status)
 	}
@@ -210,7 +210,7 @@ func TestProtectedRouteRejectsMissingToken(t *testing.T) {
 
 func TestProtectedRouteAcceptsValidTokenAndInjectsHeaders(t *testing.T) {
 	tok := makeToken(t, tokenOpts{sub: "user-456", role: "CUSTOMER", membershipStatus: "NONE", gymID: "gym-1"})
-	status, cap, _ := doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, cap, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 200 {
@@ -232,7 +232,7 @@ func TestProtectedRouteAcceptsValidTokenAndInjectsHeaders(t *testing.T) {
 
 func TestProtectedRouteStripsSpoofedHeadersAndInjectsClaims(t *testing.T) {
 	tok := makeToken(t, tokenOpts{sub: "user-real", role: "CUSTOMER", membershipStatus: "NONE"})
-	status, cap, _ := doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, cap, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization":        "Bearer " + tok,
 		"x-user-id":            "spoofed-user",
 		"x-user-role":          "SUPER_ADMIN",
@@ -255,7 +255,7 @@ func TestProtectedRouteStripsSpoofedHeadersAndInjectsClaims(t *testing.T) {
 func TestKeyRotationPreviousKeyAccepted(t *testing.T) {
 	prev := loadPrivateKey(t, "fixture_rsa_prev.key")
 	tok := makeToken(t, tokenOpts{key: prev, kid: "previous", sub: "user-prev"})
-	status, cap, _ := doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, cap, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 200 {
@@ -270,7 +270,7 @@ func TestInvalidSignatureRejected(t *testing.T) {
 	prev := loadPrivateKey(t, "fixture_rsa_prev.key")
 	// sign with prev key but claim current kid
 	tok := makeToken(t, tokenOpts{key: prev, kid: "current"})
-	status, _, _ := doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 401 {
@@ -280,7 +280,7 @@ func TestInvalidSignatureRejected(t *testing.T) {
 
 func TestUnknownKidRejected(t *testing.T) {
 	tok := makeToken(t, tokenOpts{kid: "unknown-kid"})
-	status, _, _ := doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 401 {
@@ -290,7 +290,7 @@ func TestUnknownKidRejected(t *testing.T) {
 
 func TestInvalidIssuerRejected(t *testing.T) {
 	tok := makeToken(t, tokenOpts{iss: "bad-issuer"})
-	status, _, _ := doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 401 {
@@ -300,7 +300,7 @@ func TestInvalidIssuerRejected(t *testing.T) {
 
 func TestInvalidAudienceRejected(t *testing.T) {
 	tok := makeToken(t, tokenOpts{aud: "bad-audience"})
-	status, _, _ := doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 401 {
@@ -310,7 +310,7 @@ func TestInvalidAudienceRejected(t *testing.T) {
 
 func TestExpiredTokenRejected(t *testing.T) {
 	tok := makeToken(t, tokenOpts{expOffset: -10 * time.Second})
-	status, _, _ := doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 401 {
@@ -320,7 +320,7 @@ func TestExpiredTokenRejected(t *testing.T) {
 
 func TestNoneStatusAcceptedOnOrdinaryProtectedRoute(t *testing.T) {
 	tok := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: "NONE"})
-	status, _, _ := doRequest(t, http.MethodGet, "/v1/members/me", map[string]string{
+	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/members/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 200 {
@@ -331,7 +331,7 @@ func TestNoneStatusAcceptedOnOrdinaryProtectedRoute(t *testing.T) {
 func TestMembershipGatedRouteRequiresActiveStatus(t *testing.T) {
 	for _, st := range []string{"NONE", "EXPIRED"} {
 		tok := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: st})
-		status, _, _ := doRequest(t, http.MethodGet, "/v1/memberships/booking", map[string]string{
+		status, _, _ := doRequest(t, http.MethodGet, "/api/v1/memberships/booking", map[string]string{
 			"Authorization": "Bearer " + tok,
 		}, nil)
 		if status != 403 {
@@ -339,7 +339,7 @@ func TestMembershipGatedRouteRequiresActiveStatus(t *testing.T) {
 		}
 	}
 	tok := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: "ACTIVE"})
-	status, cap, _ := doRequest(t, http.MethodGet, "/v1/memberships/booking", map[string]string{
+	status, cap, _ := doRequest(t, http.MethodGet, "/api/v1/memberships/booking", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 200 {
@@ -353,7 +353,7 @@ func TestMembershipGatedRouteRequiresActiveStatus(t *testing.T) {
 func TestTraceparentPreserved(t *testing.T) {
 	tok := makeToken(t, tokenOpts{})
 	want := "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
-	status, cap, _ := doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, cap, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 		"traceparent":   want,
 		"x-trace-id":    "legacy-trace-123",
@@ -368,7 +368,7 @@ func TestTraceparentPreserved(t *testing.T) {
 
 func TestCustomerRoleAcceptedMemberRoleRejected(t *testing.T) {
 	tok := makeToken(t, tokenOpts{role: "CUSTOMER"})
-	status, _, _ := doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 200 {
@@ -377,7 +377,7 @@ func TestCustomerRoleAcceptedMemberRoleRejected(t *testing.T) {
 
 	// MEMBER is not a valid end-user role (CUSTOMER replaced it)
 	tok = makeToken(t, tokenOpts{role: "MEMBER"})
-	status, _, _ = doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, _, _ = doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 403 {
@@ -402,7 +402,7 @@ func TestAlgorithmNoneRejected(t *testing.T) {
 	pb, _ := json.Marshal(payloadObj)
 	payload := base64.RawURLEncoding.EncodeToString(pb)
 	tok := header + "." + payload + "."
-	status, _, _ := doRequest(t, http.MethodGet, "/v1/auth/me", map[string]string{
+	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
 	if status != 401 {
