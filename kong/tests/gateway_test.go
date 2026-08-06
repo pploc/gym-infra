@@ -2,10 +2,15 @@ package tests
 
 import (
 	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,7 +18,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"crypto/x509"
 )
 
 const kongURL = "http://localhost:8000"
@@ -125,6 +129,57 @@ func makeToken(t *testing.T, o tokenOpts) string {
 		t.Fatal(err)
 	}
 	return s
+}
+
+func sha256Hex(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+func redisAddr() string {
+	if v := os.Getenv("KONG_TEST_REDIS_ADDR"); v != "" {
+		return v
+	}
+	return "127.0.0.1:6379"
+}
+
+// Minimal RESP helpers — stdlib only; no redis client dependency.
+func redisDo(cmd string, args ...string) (string, error) {
+	conn, err := net.DialTimeout("tcp", redisAddr(), 2*time.Second)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	payload := fmt.Sprintf("*%d\r\n$%d\r\n%s\r\n", len(args)+1, len(cmd), cmd)
+	for _, a := range args {
+		payload += fmt.Sprintf("$%d\r\n%s\r\n", len(a), a)
+	}
+	if _, err := io.WriteString(conn, payload); err != nil {
+		return "", err
+	}
+	buf := make([]byte, 256)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return "", err
+	}
+	return string(buf[:n]), nil
+}
+
+func redisSet(key, value string) error {
+	resp, err := redisDo("SET", key, value)
+	if err != nil {
+		return err
+	}
+	if len(resp) == 0 || resp[0] == '-' {
+		return fmt.Errorf("redis SET failed: %q", resp)
+	}
+	return nil
+}
+
+func redisDel(key string) error {
+	_, err := redisDo("DEL", key)
+	return err
 }
 
 func doRequest(t *testing.T, method, path string, headers map[string]string, body io.Reader) (int, upstreamCapture, []byte) {
@@ -414,5 +469,38 @@ func TestInternalMembershipRPCUnreachable(t *testing.T) {
 	status, _, _ := doRequest(t, http.MethodPost, "/member.v1.MemberService/GetMembershipStatusByUserId", nil, nil)
 	if status != 404 {
 		t.Fatalf("status=%d want 404", status)
+	}
+}
+
+func TestBlacklistedAccessTokenRejected(t *testing.T) {
+	tok := makeToken(t, tokenOpts{sub: "user-blacklisted"})
+	// given: Identifier logout stores blacklist:<sha256_hex(raw_token)>
+	sum := sha256Hex(tok)
+	if err := redisSet("blacklist:"+sum, "1"); err != nil {
+		t.Fatalf("seed blacklist: %v", err)
+	}
+	t.Cleanup(func() { _ = redisDel("blacklist:" + sum) })
+
+	// when
+	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
+		"Authorization": "Bearer " + tok,
+	}, nil)
+
+	// then
+	if status != 401 {
+		t.Fatalf("status=%d want 401 for blacklisted token", status)
+	}
+}
+
+func TestNonBlacklistedTokenStillAccepted(t *testing.T) {
+	tok := makeToken(t, tokenOpts{sub: "user-clean"})
+	status, cap, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
+		"Authorization": "Bearer " + tok,
+	}, nil)
+	if status != 200 {
+		t.Fatalf("status=%d want 200", status)
+	}
+	if got := headerCI(cap.Headers, "x-user-id"); got != "user-clean" {
+		t.Fatalf("x-user-id=%q", got)
 	}
 }

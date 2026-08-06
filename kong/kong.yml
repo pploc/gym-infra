@@ -105,3 +105,8 @@ plugins:
         - "^/api/v1/members/me$"
       membership_gated_routes:
         - "^/api/v1/memberships/booking"
+      # Local fixture talks to compose service "redis". Omit redis_host in prod to disable.
+      redis_host: redis
+      redis_port: 6379
+      redis_timeout_ms: 50
+      redis_database: 0

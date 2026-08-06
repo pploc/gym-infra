@@ -31,6 +31,13 @@ return {
               default = {}
             }
           },
+          -- Optional Redis blacklist (Identifier logout writes blacklist:<sha256(token)>).
+          -- Empty host disables the check. No empty-string defaults — Kong rejects them.
+          { redis_host = { type = "string", required = false } },
+          { redis_port = { type = "number", default = 6379 } },
+          { redis_password = { type = "string", required = false, referenceable = true } },
+          { redis_timeout_ms = { type = "number", default = 50 } },
+          { redis_database = { type = "number", default = 0 } },
         },
       },
     },
