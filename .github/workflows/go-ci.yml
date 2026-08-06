@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: '95'
+      coverpkg:
+        description: Optional -coverpkg value (e.g. ./internal/...) when unit tests live outside packages under test
+        required: false
+        type: string
+        default: ''
       golangci_version:
         description: golangci-lint version
         required: false
@@ -51,7 +56,12 @@ jobs:
           working-directory: ${{ inputs.service_path }}
 
       - name: Unit tests with coverage
-        run: go test -race -coverprofile=coverage.out ./...
+        run: |
+          if [ -n "${{ inputs.coverpkg }}" ]; then
+            go test -race -coverprofile=coverage.out -coverpkg=${{ inputs.coverpkg }} ./...
+          else
+            go test -race -coverprofile=coverage.out ./...
+          fi
 
       - name: Verify coverage
         run: |
