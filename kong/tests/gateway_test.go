@@ -140,7 +140,8 @@ func redisAddr() string {
 	if v := os.Getenv("KONG_TEST_REDIS_ADDR"); v != "" {
 		return v
 	}
-	return "127.0.0.1:6379"
+	// compose publishes kong redis as host 6380 (6379 often used by service redis).
+	return "127.0.0.1:6380"
 }
 
 // Minimal RESP helpers — stdlib only; no redis client dependency.
