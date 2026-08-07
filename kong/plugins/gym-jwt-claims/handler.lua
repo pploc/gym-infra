@@ -28,6 +28,7 @@ local function strip_trusted_headers()
   kong.service.request.clear_header("x-user-role")
   kong.service.request.clear_header("x-gym-id")
   kong.service.request.clear_header("x-membership-status")
+  kong.service.request.clear_header("x-trace-id")
 end
 
 local function is_route_in_list(path, list)
@@ -38,6 +39,14 @@ local function is_route_in_list(path, list)
     end
   end
   return false
+end
+
+local function is_membership_gated_route(path, list)
+  if is_route_in_list(path, list) then
+    return true
+  end
+  local route = kong.router.get_route()
+  return route and route.name == "fixture-membership-gated"
 end
 
 -- Identifier stores logout keys as blacklist:<sha256_hex(raw_access_token)>.
@@ -95,14 +104,13 @@ end
 
 function GymJwtClaimsHandler:access(conf)
   local path = kong.request.get_path()
-  local method = kong.request.get_method()
 
   -- Step 1: Always strip incoming trusted headers from untrusted client
   strip_trusted_headers()
 
   -- Check if current path/method is protected
   local is_protected = is_route_in_list(path, conf.protected_routes)
-  local is_membership_gated = is_route_in_list(path, conf.membership_gated_routes)
+  local is_membership_gated = is_membership_gated_route(path, conf.membership_gated_routes)
 
   if not is_protected and not is_membership_gated then
     -- Public route: trusted headers already stripped, pass through
@@ -162,11 +170,19 @@ function GymJwtClaimsHandler:access(conf)
   end
 
   local now = ngx.now()
-  if not claims.exp or claims.exp <= now then
+  if type(claims.exp) ~= "number" or claims.exp <= now then
     return kong.response.exit(401, { message = "Unauthorized: Token has expired" })
   end
 
-  if not claims.sub or claims.sub == "" then
+  if type(claims.iat) ~= "number" then
+    return kong.response.exit(401, { message = "Unauthorized: Missing or invalid issued-at claim" })
+  end
+
+  if type(claims.jti) ~= "string" or claims.jti == "" then
+    return kong.response.exit(401, { message = "Unauthorized: Missing or invalid JWT ID claim" })
+  end
+
+  if type(claims.sub) ~= "string" or claims.sub == "" then
     return kong.response.exit(401, { message = "Unauthorized: Missing subject (user ID)" })
   end
 
@@ -195,7 +211,7 @@ function GymJwtClaimsHandler:access(conf)
   kong.service.request.set_header("x-gym-id", claims.gym_id or "")
   kong.service.request.set_header("x-membership-status", membership_status)
 
-  -- Traceparent precedence rule (W3C traceparent preserved if valid; x-trace-id fallback handled downstream/upstream)
+  -- W3C traceparent/tracestate pass through unchanged; public x-trace-id is stripped.
 end
 
 return GymJwtClaimsHandler

@@ -65,16 +65,20 @@ func loadPrivateKey(t *testing.T, name string) *rsa.PrivateKey {
 }
 
 type tokenOpts struct {
-	key               *rsa.PrivateKey
-	kid               string
-	alg               string
-	iss               string
-	aud               string
-	sub               string
-	role              string
-	membershipStatus  string
-	gymID             string
-	expOffset         time.Duration
+	key              *rsa.PrivateKey
+	kid              string
+	alg              string
+	iss              string
+	aud              string
+	sub              string
+	role             string
+	membershipStatus string
+	gymID            string
+	expOffset        time.Duration
+	omitIAT          bool
+	iat              any
+	omitJTI          bool
+	jti              any
 }
 
 func makeToken(t *testing.T, o tokenOpts) string {
@@ -115,12 +119,24 @@ func makeToken(t *testing.T, o tokenOpts) string {
 		"iss":               o.iss,
 		"aud":               o.aud,
 		"sub":               o.sub,
-		"iat":               now.Unix(),
 		"exp":               now.Add(o.expOffset).Unix(),
-		"jti":               "test-jti-123",
 		"role":              o.role,
 		"membership_status": o.membershipStatus,
 		"gym_id":            o.gymID,
+	}
+	if !o.omitIAT {
+		if o.iat != nil {
+			claims["iat"] = o.iat
+		} else {
+			claims["iat"] = now.Unix()
+		}
+	}
+	if !o.omitJTI {
+		if o.jti != nil {
+			claims["jti"] = o.jti
+		} else {
+			claims["jti"] = "test-jti-123"
+		}
 	}
 	tok := jwt.NewWithClaims(jwt.GetSigningMethod(o.alg), claims)
 	tok.Header["kid"] = o.kid
@@ -239,20 +255,134 @@ func equalFold(a, b string) bool {
 	return true
 }
 
-func TestPublicRoutesPassWithoutTokenAndStripHeaders(t *testing.T) {
+func TestGivenPublicLoginAndSpoofedTrustedHeaders_WhenPost_ThenAllTrustedHeadersAreStripped(t *testing.T) {
 	status, cap, _ := doRequest(t, http.MethodPost, "/api/v1/auth/login", map[string]string{
-		"x-user-id":            "hacker-123",
-		"x-user-role":          "SUPER_ADMIN",
-		"x-gym-id":             "hacker-gym",
-		"x-membership-status":  "ACTIVE",
-		"Content-Type":         "application/json",
+		"x-user-id":           "hacker-123",
+		"x-user-role":         "SUPER_ADMIN",
+		"x-gym-id":            "hacker-gym",
+		"x-membership-status": "ACTIVE",
+		"x-trace-id":          "hacker-trace",
 	}, nil)
-	if status != 200 {
-		t.Fatalf("status=%d want 200", status)
+	if status != http.StatusOK {
+		t.Fatalf("status=%d want %d", status, http.StatusOK)
 	}
-	for _, h := range []string{"x-user-id", "x-user-role", "x-gym-id", "x-membership-status"} {
-		if v := headerCI(cap.Headers, h); v != "" {
-			t.Fatalf("public route leaked %s=%q", h, v)
+	for _, header := range []string{"x-user-id", "x-user-role", "x-gym-id", "x-membership-status", "x-trace-id"} {
+		if got := headerCI(cap.Headers, header); got != "" {
+			t.Fatalf("public route leaked %s=%q", header, got)
+		}
+	}
+}
+
+func TestGivenProtectedRequestAndSpoofedXTraceID_WhenValidToken_ThenTraceIDIsStrippedAndW3CIsPreserved(t *testing.T) {
+	token := makeToken(t, tokenOpts{})
+	traceparent := "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+	tracestate := "vendor=value"
+	status, cap, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
+		"Authorization": "Bearer " + token,
+		"x-trace-id":    "spoofed",
+		"traceparent":   traceparent,
+		"tracestate":    tracestate,
+	}, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status=%d want %d", status, http.StatusOK)
+	}
+	if got := headerCI(cap.Headers, "x-trace-id"); got != "" {
+		t.Fatalf("x-trace-id=%q", got)
+	}
+	if got := headerCI(cap.Headers, "traceparent"); got != traceparent {
+		t.Fatalf("traceparent=%q", got)
+	}
+	if got := headerCI(cap.Headers, "tracestate"); got != tracestate {
+		t.Fatalf("tracestate=%q", got)
+	}
+}
+
+func TestGivenMissingOrMalformedRequiredJWTClaims_WhenProtectedRequest_ThenUnauthorized(t *testing.T) {
+	for name, options := range map[string]tokenOpts{
+		"missing iat":   {omitIAT: true},
+		"malformed iat": {iat: "now"},
+		"missing jti":   {omitJTI: true},
+		"blank jti":     {jti: ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
+				"Authorization": "Bearer " + makeToken(t, options),
+			}, nil)
+			if status != http.StatusUnauthorized {
+				t.Fatalf("status=%d want %d", status, http.StatusUnauthorized)
+			}
+		})
+	}
+}
+
+func TestGivenContractRoute_WhenRequestUsesDeclaredMethod_ThenRouteMatches(t *testing.T) {
+	public := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/v1/auth/register"},
+		{http.MethodPost, "/api/v1/auth/login"},
+		{http.MethodPost, "/api/v1/auth/oauth/google"},
+		{http.MethodPost, "/api/v1/auth/refresh"},
+		{http.MethodPost, "/api/v1/auth/email/verify"},
+		{http.MethodPost, "/api/v1/auth/email/resend"},
+	}
+	protected := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/v1/auth/logout"},
+		{http.MethodGet, "/api/v1/users/me"},
+		{http.MethodPost, "/api/v1/users/password"},
+		{http.MethodPost, "/api/v1/auth/gym"},
+		{http.MethodPost, "/api/v1/admin/trainers"},
+		{http.MethodPost, "/api/v1/admin/users/example-id/suspend"},
+		{http.MethodGet, "/api/v1/admin/users"},
+	}
+
+	for _, route := range public {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			// given
+
+			// when
+			status, _, _ := doRequest(t, route.method, route.path, nil, nil)
+
+			// then
+			if status != http.StatusOK {
+				t.Fatalf("status=%d want %d", status, http.StatusOK)
+			}
+		})
+	}
+	for _, route := range protected {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			// given
+			headers := map[string]string{"Authorization": "Bearer " + makeToken(t, tokenOpts{})}
+
+			// when
+			status, _, _ := doRequest(t, route.method, route.path, headers, nil)
+
+			// then
+			if status != http.StatusOK {
+				t.Fatalf("status=%d want %d", status, http.StatusOK)
+			}
+		})
+	}
+}
+
+func TestGivenIdentifierRoute_WhenWrongHTTPMethod_ThenNoRouteMatches(t *testing.T) {
+	for path, method := range map[string]string{
+		"/api/v1/auth/login":                     http.MethodGet,
+		"/api/v1/users/me":                       http.MethodPost,
+		"/api/v1/admin/users/example-id/suspend": http.MethodGet,
+	} {
+		// given
+
+		// when
+		status, _, _ := doRequest(t, method, path, nil, nil)
+
+		// then
+		if status != http.StatusNotFound {
+			t.Fatalf("%s %s: status=%d want %d", method, path, status, http.StatusNotFound)
 		}
 	}
 }
@@ -289,10 +419,10 @@ func TestProtectedRouteAcceptsValidTokenAndInjectsHeaders(t *testing.T) {
 func TestProtectedRouteStripsSpoofedHeadersAndInjectsClaims(t *testing.T) {
 	tok := makeToken(t, tokenOpts{sub: "user-real", role: "CUSTOMER", membershipStatus: "NONE"})
 	status, cap, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
-		"Authorization":        "Bearer " + tok,
-		"x-user-id":            "spoofed-user",
-		"x-user-role":          "SUPER_ADMIN",
-		"x-membership-status":  "ACTIVE",
+		"Authorization":       "Bearer " + tok,
+		"x-user-id":           "spoofed-user",
+		"x-user-role":         "SUPER_ADMIN",
+		"x-membership-status": "ACTIVE",
 	}, nil)
 	if status != 200 {
 		t.Fatalf("status=%d want 200", status)
@@ -374,32 +504,32 @@ func TestExpiredTokenRejected(t *testing.T) {
 	}
 }
 
-func TestNoneStatusAcceptedOnOrdinaryProtectedRoute(t *testing.T) {
-	tok := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: "NONE"})
-	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/members/me", map[string]string{
-		"Authorization": "Bearer " + tok,
+func TestGivenNoneStatus_WhenOrdinaryProtectedRoute_ThenAccepted(t *testing.T) {
+	token := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: "NONE"})
+	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
+		"Authorization": "Bearer " + token,
 	}, nil)
-	if status != 200 {
-		t.Fatalf("status=%d want 200", status)
+	if status != http.StatusOK {
+		t.Fatalf("status=%d want %d", status, http.StatusOK)
 	}
 }
 
-func TestMembershipGatedRouteRequiresActiveStatus(t *testing.T) {
-	for _, st := range []string{"NONE", "EXPIRED"} {
-		tok := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: st})
-		status, _, _ := doRequest(t, http.MethodGet, "/api/v1/memberships/booking", map[string]string{
-			"Authorization": "Bearer " + tok,
+func TestGivenMembershipGatedFixture_WhenStatusIsNotActive_ThenForbidden(t *testing.T) {
+	for _, membershipStatus := range []string{"NONE", "EXPIRED"} {
+		token := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: membershipStatus})
+		status, _, _ := doRequest(t, http.MethodPost, "/__fixtures/membership-gated", map[string]string{
+			"Authorization": "Bearer " + token,
 		}, nil)
-		if status != 403 {
-			t.Fatalf("status=%d for %s want 403", status, st)
+		if status != http.StatusForbidden {
+			t.Fatalf("status=%d for %s want %d", status, membershipStatus, http.StatusForbidden)
 		}
 	}
-	tok := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: "ACTIVE"})
-	status, cap, _ := doRequest(t, http.MethodGet, "/api/v1/memberships/booking", map[string]string{
-		"Authorization": "Bearer " + tok,
+	token := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: "ACTIVE"})
+	status, cap, _ := doRequest(t, http.MethodPost, "/__fixtures/membership-gated", map[string]string{
+		"Authorization": "Bearer " + token,
 	}, nil)
-	if status != 200 {
-		t.Fatalf("status=%d want 200", status)
+	if status != http.StatusOK {
+		t.Fatalf("status=%d want %d", status, http.StatusOK)
 	}
 	if got := headerCI(cap.Headers, "x-membership-status"); got != "ACTIVE" {
 		t.Fatalf("x-membership-status=%q", got)

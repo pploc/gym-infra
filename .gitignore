@@ -21,3 +21,7 @@ out/
 *.swp
 .DS_Store
 *.tmp
+kong/g5-certs/
+kong/g5-last-run.log
+kong/g5-business-status
+kong/g5-private/

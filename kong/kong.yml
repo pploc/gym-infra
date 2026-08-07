@@ -3,71 +3,68 @@ _transform: true
 
 services:
   - name: ms-gym-identifier
-    url: http://mock-upstream:8080
+    url: http://ms-gym-identifier:8080
     routes:
       - name: identifier-public-register
-        paths:
-          - /api/v1/auth/register
+        paths: [/api/v1/auth/register]
+        methods: [POST]
         strip_path: false
       - name: identifier-public-login
-        paths:
-          - /api/v1/auth/login
+        paths: [/api/v1/auth/login]
+        methods: [POST]
         strip_path: false
       - name: identifier-public-google-login
-        paths:
-          - /api/v1/auth/oauth/google
+        paths: [/api/v1/auth/oauth/google]
+        methods: [POST]
         strip_path: false
       - name: identifier-public-refresh
-        paths:
-          - /api/v1/auth/refresh
+        paths: [/api/v1/auth/refresh]
+        methods: [POST]
         strip_path: false
       - name: identifier-public-verify-email
-        paths:
-          - /api/v1/auth/email/verify
+        paths: [/api/v1/auth/email/verify]
+        methods: [POST]
         strip_path: false
       - name: identifier-public-resend-email
-        paths:
-          - /api/v1/auth/email/resend
+        paths: [/api/v1/auth/email/resend]
+        methods: [POST]
         strip_path: false
       - name: identifier-protected-logout
-        paths:
-          - /api/v1/auth/logout
+        paths: [/api/v1/auth/logout]
+        methods: [POST]
         strip_path: false
       - name: identifier-protected-me
-        paths:
-          - /api/v1/users/me
+        paths: [/api/v1/users/me]
+        methods: [GET]
         strip_path: false
       - name: identifier-protected-change-password
-        paths:
-          - /api/v1/users/password
+        paths: [/api/v1/users/password]
+        methods: [POST]
         strip_path: false
       - name: identifier-protected-select-gym
-        paths:
-          - /api/v1/auth/gym
+        paths: [/api/v1/auth/gym]
+        methods: [POST]
         strip_path: false
       - name: identifier-protected-trainer
-        paths:
-          - /api/v1/admin/trainers
+        paths: [/api/v1/admin/trainers]
+        methods: [POST]
         strip_path: false
       - name: identifier-protected-suspend
-        paths:
-          - /api/v1/admin/users/.*/suspend
+        paths: ["~/api/v1/admin/users/[^/]+/suspend$"]
+        methods: [POST]
         strip_path: false
       - name: identifier-protected-users
-        paths:
-          - /api/v1/admin/users
+        paths: ["~/api/v1/admin/users$"]
+        methods: [GET]
         strip_path: false
 
-  - name: ms-gym-member
+  # Fixture-only route for gateway membership-policy tests; not a Member API.
+  - name: kong-policy-fixture
     url: http://mock-upstream:8080
     routes:
-      - name: member-protected-profile
-        paths:
-          - /api/v1/members/me
-        strip_path: false
-      - name: member-gated-booking
-        paths:
-          - /api/v1/memberships/booking
+      - name: fixture-membership-gated
+        paths: [/__fixtures/membership-gated]
+        methods: [POST]
         strip_path: false
 
 plugins:
@@ -102,10 +99,8 @@ plugins:
         - "^/api/v1/users/password$"
         - "^/api/v1/auth/gym$"
         - "^/api/v1/admin/.*"
-        - "^/api/v1/members/me$"
       membership_gated_routes:
-        - "^/api/v1/memberships/booking"
-      # Local fixture talks to compose service "redis". Omit redis_host in prod to disable.
+        - "^/__fixtures/membership-gated$"
       redis_host: redis
       redis_port: 6379
       redis_timeout_ms: 50

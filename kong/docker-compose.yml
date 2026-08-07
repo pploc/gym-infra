@@ -16,6 +16,11 @@ services:
       context: ./mock-upstream
     image: gym-mock-upstream:local
     container_name: gym-mock-upstream
+    networks:
+      default:
+        aliases:
+          - ms-gym-identifier
+          - ms-gym-member
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/health || exit 1"]
       interval: 2s

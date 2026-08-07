@@ -1,0 +1,214 @@
+name: gym-g5
+
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  identity-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: identity_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d identity_db"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  member-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gym_member
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gym_member"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.8.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_INTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 1
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  topic-seed:
+    image: apache/kafka:3.8.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: >-
+      sh -ec 'for topic in
+      identity.user.registered.v1 identity.user.suspended.v1 identity.user.role-changed.v1
+      identity.email.verification-requested.v1 payment.completed.v1
+      membership.activated.v1 membership.paused.v1 membership.resumed.v1
+      membership.expiring-soon.v1 membership.expired.v1; do
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic "$$topic" --partitions 1 --replication-factor 1;
+      done'
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.7.1
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/subjects"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  schema-seed:
+    image: eclipse-temurin:26-jdk
+    depends_on:
+      topic-seed:
+        condition: service_completed_successfully
+      schema-registry:
+        condition: service_healthy
+    working_dir: /tmp/gym-proto
+    environment:
+      GRADLE_USER_HOME: /tmp/gradle
+    volumes:
+      - ../../gym-proto:/source:ro
+    command: >-
+      sh -ec 'cp -R /source/. /tmp/gym-proto &&
+      ./gradlew seedConfluentSchemas -PschemaRegistryUrl=http://schema-registry:8081 --no-daemon'
+
+  identifier-migrate:
+    image: postgres:16-alpine
+    depends_on:
+      identity-postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: postgres
+    volumes:
+      - ../../ms-gym-identifier/migrations:/migrations:ro
+    command: >-
+      sh -ec 'psql -h identity-postgres -U postgres -d identity_db -f /migrations/001_init.sql &&
+      psql -h identity-postgres -U postgres -d identity_db -f /migrations/002_email_verification_tokens.sql'
+
+  ms-gym-member:
+    build:
+      context: ../../ms-gym-member
+      args:
+        GITHUB_ACTOR: ${GITHUB_ACTOR:-}
+        GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    depends_on:
+      member-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      topic-seed:
+        condition: service_completed_successfully
+      schema-registry:
+        condition: service_healthy
+      schema-seed:
+        condition: service_completed_successfully
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://member-postgres:5432/gym_member
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      MEMBER_GRPC_TLS_ENABLED: "true"
+      MEMBER_GRPC_SERVER_CERT: /run/mtls/member.crt
+      MEMBER_GRPC_SERVER_KEY: /run/mtls/member.key
+      MEMBER_GRPC_CLIENT_CA: /run/mtls/ca.crt
+    volumes:
+      - ./g5-certs:/run/mtls:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\\\\r\\\\n\\\\r\\\\n' >&3 && grep -q '200' <&3\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  ms-gym-identifier:
+    build:
+      context: ../../ms-gym-identifier
+      args:
+        GITHUB_ACTOR: ${GITHUB_ACTOR:-}
+        GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    depends_on:
+      identifier-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      ms-gym-member:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@identity-postgres:5432/identity_db?sslmode=disable
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      JWT_PRIVATE_KEY_PATH: /run/jwt/fixture_rsa.key
+      MEMBER_GRPC_ADDR: ms-gym-member:50051
+      MEMBER_CLIENT_CERT: /run/mtls/identifier.crt
+      MEMBER_CLIENT_KEY: /run/mtls/identifier.key
+      MEMBER_SERVER_CA: /run/mtls/ca.crt
+    volumes:
+      - ./g5-certs:/run/mtls:ro
+      - ./certs/fixture_rsa.key:/run/jwt/fixture_rsa.key:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/readyz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  kong:
+    image: kong:3.8-ubuntu
+    depends_on:
+      redis:
+        condition: service_healthy
+      ms-gym-identifier:
+        condition: service_healthy
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_PLUGINS: bundled,gym-jwt-claims
+      KONG_LUA_PACKAGE_PATH: /opt/?.lua;/opt/?/init.lua;;
+    volumes:
+      - ./kong.yml:/usr/local/kong/declarative/kong.yml:ro
+      - ./plugins/gym-jwt-claims:/opt/kong/plugins/gym-jwt-claims:ro
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD-SHELL", "kong health || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
