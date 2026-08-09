@@ -1,0 +1,123 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: ms-gym-identifier
+    url: http://ms-gym-identifier:8080
+    routes:
+      - name: identifier-public-register
+        paths: [/api/v1/auth/register]
+        methods: [POST]
+        strip_path: false
+      - name: identifier-public-login
+        paths: [/api/v1/auth/login]
+        methods: [POST]
+        strip_path: false
+      - name: identifier-public-google-login
+        paths: [/api/v1/auth/oauth/google]
+        methods: [POST]
+        strip_path: false
+      - name: identifier-public-refresh
+        paths: [/api/v1/auth/refresh]
+        methods: [POST]
+        strip_path: false
+      - name: identifier-public-verify-email
+        paths: [/api/v1/auth/email/verify]
+        methods: [POST]
+        strip_path: false
+      - name: identifier-public-resend-email
+        paths: [/api/v1/auth/email/resend]
+        methods: [POST]
+        strip_path: false
+      - name: identifier-protected-logout
+        paths: [/api/v1/auth/logout]
+        methods: [POST]
+        strip_path: false
+      - name: identifier-protected-me
+        paths: [/api/v1/users/me]
+        methods: [GET]
+        strip_path: false
+      - name: identifier-protected-change-password
+        paths: [/api/v1/users/password]
+        methods: [POST]
+        strip_path: false
+      - name: identifier-protected-select-gym
+        paths: [/api/v1/auth/gym]
+        methods: [POST]
+        strip_path: false
+      - name: identifier-protected-trainer
+        paths: [/api/v1/admin/trainers]
+        methods: [POST]
+        strip_path: false
+      - name: identifier-protected-suspend
+        paths: ["~/api/v1/admin/users/[^/]+/suspend$"]
+        methods: [POST]
+        strip_path: false
+      - name: identifier-protected-users
+        paths: ["~/api/v1/admin/users$"]
+        methods: [GET]
+        strip_path: false
+
+  - name: ms-gym-plans
+    url: http://ms-gym-plans:8080
+    routes:
+      - name: plans-gyms
+        paths: [/api/v1/gyms]
+        methods: [GET, POST, PUT]
+        strip_path: false
+      - name: plans-plans
+        paths: [/api/v1/plans]
+        methods: [GET, PUT]
+        strip_path: false
+
+  # Fixture-only route for gateway membership-policy tests; not a Member API.
+  - name: kong-policy-fixture
+    url: http://mock-upstream:8080
+    routes:
+      - name: fixture-membership-gated
+        paths: [/__fixtures/membership-gated]
+        methods: [POST]
+        strip_path: false
+
+plugins:
+  - name: gym-jwt-claims
+    config:
+      issuer: "gym-identifier"
+      audience: "gym-api"
+      public_keys:
+        current: |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz7xgKWkH36yxL5kws7M3
+          i5VC79DjxPCDyOBel8z0SrxACOOvXHaL71pjFEtY80RXlMkzB90cwNk1DICuS5Sq
+          omjguXLUoWjvbbC13P08wgNLU3JVKz9RHw2nS+PgbSIVk8vzWzYX4yF52zIYrkX8
+          r1vpkaCBcI9HVdbyzy7oMJT2X6mygQGxblxiinqKZN5MbrOLZN+7rqR27cECgvTo
+          1D/fe09TbHBqd4rWNdwsKsB/J1kmaTjj5xc1G20PutGSbzPDfuTPUDbwptIibX/q
+          Fs5qnSq9nZ1o46WgQm5pfyCGuafLrv+ODE8pbiR/hJw15QPaK0QbKOfhK8xJ8+B/
+          +wIDAQAB
+          -----END PUBLIC KEY-----
+        previous: |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA30vynafr+KQDCvbt3O+/
+          ZkEDmlHyADqEOXltfqbeVc7bVwaaIvk6ifK0XBulskCv89Xj8WQkm2FX7CGjoqmM
+          D3GA+WfQIBu6n1YpDY3c5CUvQp64wEvQ0IMt+iZnK/Tl8C4V1h52qkLI9cPpO2d7
+          GsfPUZ8hll7+3+LhpCmD3w48oNO8hiO4C7SUJnRw3yzGWX4X0HPCadgvZZkKA0NW
+          T2dfKZWC2CUMyTTJfTGL9G68DJDEkzgb9uXZ2qThEKx04C3vYUhZ7bJ7Rdq+XyUF
+          L/wq/sVBYT5tmR9rynPrvz5sWC5s1CJ13q4A/HTafNGpyl5eUBJiuI+NfpQUaOiR
+          VQIDAQAB
+          -----END PUBLIC KEY-----
+      protected_routes:
+        - "^/api/v1/auth/logout$"
+        - "^/api/v1/users/me$"
+        - "^/api/v1/users/password$"
+        - "^/api/v1/auth/gym$"
+        - "^/api/v1/admin/.*"
+        - "^/api/v1/gyms$"
+        - "^/api/v1/gyms/.*"
+        - "^/api/v1/plans$"
+        - "^/api/v1/plans/.*"
+      membership_gated_routes:
+        - "^/__fixtures/membership-gated$"
+      redis_host: redis
+      redis_port: 6379
+      redis_timeout_ms: 50
+      redis_database: 0
