@@ -1,0 +1,128 @@
+# Example overlay for ms-gym-plans using the shared gym-service chart.
+# helm upgrade --install ms-gym-plans ./helm/gym-service \
+#   -f examples/ms-gym-plans-values.yaml -n gym-system
+#
+# Public catalog HTTP: 8080 (Kong). Internal workload gRPC: 50051 (mTLS).
+# Plans has no Kafka / Schema Registry / Redis / outbox configuration.
+
+nameOverride: ms-gym-plans
+
+image:
+  repository: ghcr.io/pploc/ms-gym-plans
+  tag: develop
+
+service:
+  type: ClusterIP
+  grpcPort: 50051
+  httpPort: 8080
+  metricsPort: 9090
+
+probes:
+  enabled: true
+  liveness:
+    path: /actuator/health/liveness
+    port: http
+  readiness:
+    path: /actuator/health/readiness
+    port: http
+  startup:
+    enabled: true
+    path: /actuator/health/liveness
+    port: http
+
+istio:
+  enabled: true
+  inject: true
+  gateway:
+    create: false
+    name: gym-gateway
+    hosts:
+      - plans.gym.local
+  virtualService:
+    enabled: true
+    gateways:
+      - gym-gateway
+    hosts:
+      - plans.gym.local
+    prefix: /
+  destinationRule:
+    enabled: true
+    tlsMode: ISTIO_MUTUAL
+  peerAuthentication:
+    enabled: true
+    mtlsMode: STRICT
+
+ingress:
+  enabled: false
+
+# NetworkPolicy: Kong → HTTP only; Identifier/Member → gRPC only; no broad gRPC ingress.
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes: istio-system
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-gateway
+        - podSelector:
+            matchLabels:
+              istio: ingressgateway
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-identifier
+      ports:
+        - protocol: TCP
+          port: 50051
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-member
+      ports:
+        - protocol: TCP
+          port: 50051
+
+env:
+  - name: ENV
+    value: "local"
+  - name: SPRING_DATASOURCE_URL
+    value: "jdbc:postgresql://postgres:5432/plans_db"
+  - name: SPRING_DATASOURCE_USERNAME
+    value: "postgres"
+  - name: SPRING_DATASOURCE_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: ms-gym-plans-secrets
+        key: db-password
+        optional: true
+  - name: GRPC_SERVER_PORT
+    value: "50051"
+  - name: PLANS_GRPC_TLS_ENABLED
+    value: "true"
+  - name: PLANS_GRPC_ALLOW_PLAINTEXT
+    value: "false"
+  - name: PLANS_GRPC_SERVER_CERT
+    value: "/var/run/certs/tls.crt"
+  - name: PLANS_GRPC_SERVER_KEY
+    value: "/var/run/certs/tls.key"
+  - name: PLANS_GRPC_CLIENT_CA
+    value: "/var/run/certs/ca.crt"
+
+# Mount server leaf + client CA from a Secret (never bake certs/local into the image).
+volumeMounts:
+  - name: grpc-mtls
+    mountPath: /var/run/certs
+    readOnly: true
+
+volumes:
+  - name: grpc-mtls
+    secret:
+      secretName: ms-gym-plans-grpc-mtls
