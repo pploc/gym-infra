@@ -124,21 +124,21 @@ grpcurl_member_purchase() {
   user_id=$3
   gym_id=$4
   membership=$5
-  # Member purchase is ROLE_RESTRICTED CUSTOMER; claims come from gateway-style metadata.
-  # Peer cert only proves mTLS to Member server CA — any trusted client cert works for ROLE path.
+  idempotency_key=$6
+  # End-user RPCs require Kong SAN; claims are accepted only from that peer.
   docker run --rm --network "$network" \
     -v "$root/g8-certs:/certs:ro" \
     --user "$(id -u):$(id -g)" \
     fullstorydev/grpcurl:v1.9.1 \
     -cacert /certs/ca.crt \
-    -cert /certs/identifier.crt \
-    -key /certs/identifier.key \
+    -cert /certs/kong.crt \
+    -key /certs/kong.key \
     -servername ms-gym-member \
     -H "x-user-id: $user_id" \
     -H "x-user-role: CUSTOMER" \
     -H "x-gym-id: $gym_id" \
     -H "x-membership-status: $membership" \
-    -d "{\"planId\":\"$plan_id\",\"provider\":\"$provider\"}" \
+    -d "{\"planId\":\"$plan_id\",\"provider\":\"$provider\",\"idempotencyKey\":\"$idempotency_key\"}" \
     ms-gym-member:50051 member.v1.MemberService/PurchaseMembership
 }
 
@@ -310,7 +310,7 @@ grpcurl_plans_active_as_member "$gym_id"
 
 step='purchasing membership over Member gRPC'
 printf '%s\n' "running: $step" >"$status_file"
-purchase_json=$(grpcurl_member_purchase "$plan_id" MOMO "$user_id" "$gym_id" NONE)
+purchase_json=$(grpcurl_member_purchase "$plan_id" MOMO "$user_id" "$gym_id" NONE "g8-purchase-$user_id-$plan_id")
 # grpcurl defaults to camelCase JSON
 payment_id=$(printf '%s' "$purchase_json" | json_field paymentId)
 [ -n "$payment_id" ]

@@ -79,6 +79,24 @@ services:
         methods: [POST]
         strip_path: false
 
+  # Native gRPC upstream for public Member RPCs only.
+  # Internal workload methods are never routed through Kong.
+  - name: ms-gym-member-grpc
+    url: grpcs://ms-gym-member:50051
+    protocol: grpcs
+    routes:
+      - name: member-public-grpc
+        protocols: [grpc, grpcs]
+        paths:
+          - /member.v1.MemberService/GetMember
+          - /member.v1.MemberService/UpdateProfile
+          - /member.v1.MemberService/ListMembers
+          - /member.v1.MemberService/PurchaseMembership
+          - /member.v1.MemberService/PauseMembership
+          - /member.v1.MemberService/ResumeMembership
+          - /member.v1.MemberService/GetMembershipStatus
+        strip_path: false
+
 plugins:
   - name: gym-jwt-claims
     config:
@@ -115,6 +133,7 @@ plugins:
         - "^/api/v1/gyms/.*"
         - "^/api/v1/plans$"
         - "^/api/v1/plans/.*"
+        - "^/member\\.v1\\.MemberService/(GetMember|UpdateProfile|ListMembers|PurchaseMembership|PauseMembership|ResumeMembership|GetMembershipStatus)$"
       membership_gated_routes:
         - "^/__fixtures/membership-gated$"
       redis_host: redis
