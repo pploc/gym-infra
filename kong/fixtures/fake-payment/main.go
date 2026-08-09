@@ -12,8 +12,9 @@ import (
 	"time"
 
 	commonkafka "github.com/pploc/common-go/kafka"
+	commonv1 "github.com/pploc/proto-go/common/v1"
 	eventsv1 "github.com/pploc/proto-go/events/v1"
-	paymentv1 "github.com/pploc/proto-go/v3/payment/v1"
+	paymentv1 "github.com/pploc/proto-go/payment/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -29,7 +30,7 @@ type paymentRecord struct {
 	ReferenceID string
 	AmountVnd   int64
 	Provider    string
-	PaymentType string
+	PaymentType commonv1.PaymentType
 	EventID     string
 }
 
@@ -101,6 +102,9 @@ func (s *server) InitiatePayment(_ context.Context, req *paymentv1.InitiatePayme
 	if req.GetAmountVnd() <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "amount_vnd required")
 	}
+	if req.GetPaymentType() == commonv1.PaymentType_PAYMENT_TYPE_UNSPECIFIED {
+		return nil, status.Error(codes.InvalidArgument, "payment_type required")
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -171,10 +175,14 @@ func (s *server) handleComplete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) publish(ctx context.Context, rec *paymentRecord) error {
+	payType := rec.PaymentType
+	if payType == commonv1.PaymentType_PAYMENT_TYPE_UNSPECIFIED {
+		payType = commonv1.PaymentType_PAYMENT_TYPE_MEMBERSHIP
+	}
 	payload := &eventsv1.PaymentCompletedEvent{
 		PaymentId:   rec.PaymentID,
 		UserId:      rec.UserID,
-		Type:        firstNonEmpty(rec.PaymentType, "MEMBERSHIP"),
+		Type:        payType,
 		ReferenceId: rec.ReferenceID,
 		AmountVnd:   rec.AmountVnd,
 		Provider:    rec.Provider,
@@ -195,13 +203,6 @@ func env(k, def string) string {
 		return v
 	}
 	return def
-}
-
-func firstNonEmpty(v, def string) string {
-	if strings.TrimSpace(v) == "" {
-		return def
-	}
-	return v
 }
 
 func itoa(n int) string {

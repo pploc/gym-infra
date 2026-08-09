@@ -194,7 +194,7 @@ $compose run -d --name "$capture_container" --no-deps schema-seed sh -ec '
 step='registering customer'
 printf '%s\n' "running: $step" >"$status_file"
 register_response=$(post_json /api/v1/auth/register "{\"email\":\"$email\",\"password\":\"$password\",\"full_name\":\"G8 Runner\"}")
-[ "$(printf '%s' "$register_response" | json_field status)" = 'PENDING_VERIFICATION' ]
+[ "$(printf '%s' "$register_response" | json_field status)" = 'USER_STATUS_PENDING_VERIFICATION' ]
 
 step='checking registration transaction'
 printf '%s\n' "running: $step" >"$status_file"
@@ -250,7 +250,7 @@ gym_id=$(printf '%s' "$gym_resp" | json_field id)
 
 step='creating active plan through Plans HTTP'
 printf '%s\n' "running: $step" >"$status_file"
-plan_resp=$(authorized_json POST "/api/v1/gyms/$gym_id/plans" "{\"name\":\"G8 Monthly\",\"planType\":\"MONTHLY\",\"durationDays\":30,\"priceVnd\":450000,\"description\":\"g8\",\"active\":true}" "$admin_access")
+plan_resp=$(authorized_json POST "/api/v1/gyms/$gym_id/plans" "{\"name\":\"G8 Monthly\",\"planType\":\"PLAN_TYPE_MONTHLY\",\"durationDays\":30,\"priceVnd\":450000,\"description\":\"g8\",\"active\":true}" "$admin_access")
 plan_id=$(printf '%s' "$plan_resp" | json_field id)
 [ -n "$plan_id" ]
 price=$(sql_plans "SELECT price_vnd FROM membership_plans WHERE id = '$plan_id'")
@@ -260,7 +260,7 @@ step='creating closed gym for negative selection'
 printf '%s\n' "running: $step" >"$status_file"
 closed_resp=$(authorized_json POST /api/v1/gyms "{\"chainId\":\"$chain_id\",\"name\":\"G8 Closed Gym\",\"address\":\"2 Test Way\",\"city\":\"Test City\"}" "$admin_access")
 closed_gym_id=$(printf '%s' "$closed_resp" | json_field id)
-authorized_json PUT "/api/v1/gyms/$closed_gym_id" "{\"chainId\":\"$chain_id\",\"name\":\"G8 Closed Gym\",\"address\":\"2 Test Way\",\"city\":\"Test City\",\"status\":\"CLOSED\"}" "$admin_access" >/dev/null
+authorized_json PUT "/api/v1/gyms/$closed_gym_id" "{\"chainId\":\"$chain_id\",\"name\":\"G8 Closed Gym\",\"address\":\"2 Test Way\",\"city\":\"Test City\",\"status\":\"GYM_LOCATION_STATUS_CLOSED\"}" "$admin_access" >/dev/null
 [ "$(sql_plans "SELECT status FROM gym_locations WHERE id = '$closed_gym_id'")" = CLOSED ]
 
 step='demoting back to customer for selection'
@@ -273,7 +273,7 @@ step='selecting gym with NONE membership'
 printf '%s\n' "running: $step" >"$status_file"
 selected_none=$(authorized_json POST /api/v1/auth/gym "{\"gym_id\":\"$gym_id\"}" "$customer_access")
 [ "$(printf '%s' "$selected_none" | json_field gym_id)" = "$gym_id" ]
-[ "$(printf '%s' "$selected_none" | json_field membership_status)" = 'NONE' ]
+[ "$(printf '%s' "$selected_none" | json_field membership_status)" = 'MEMBERSHIP_STATUS_NONE' ]
 selected_access=$(printf '%s' "$selected_none" | json_field access_token)
 printf '%s' "$selected_access" | assert_selected_token "$gym_id" NONE
 
@@ -336,7 +336,7 @@ wait_for 'subscription ACTIVE' "$compose exec -T member-postgres psql -U postgre
 step='selecting gym after activation reports ACTIVE'
 printf '%s\n' "running: $step" >"$status_file"
 selected_active=$(authorized_json POST /api/v1/auth/gym "{\"gym_id\":\"$gym_id\"}" "$customer_access")
-[ "$(printf '%s' "$selected_active" | json_field membership_status)" = 'ACTIVE' ]
+[ "$(printf '%s' "$selected_active" | json_field membership_status)" = 'MEMBERSHIP_STATUS_ACTIVE' ]
 printf '%s' "$selected_active" | json_field access_token | assert_selected_token "$gym_id" ACTIVE
 
 step='replaying payment completion is idempotent'
@@ -351,7 +351,7 @@ printf '%s\n' "running: $step" >"$status_file"
 sql_identity "UPDATE users SET role = 'SUPER_ADMIN' WHERE id = '$user_id'" >/dev/null
 admin2=$(post_json /api/v1/auth/login "{\"email\":\"$email\",\"password\":\"$password\"}")
 admin2_access=$(printf '%s' "$admin2" | json_field access_token)
-authorized_json PUT "/api/v1/plans/$plan_id" "{\"name\":\"G8 Monthly\",\"planType\":\"MONTHLY\",\"durationDays\":30,\"priceVnd\":999999,\"description\":\"mutated\",\"active\":true}" "$admin2_access" >/dev/null
+authorized_json PUT "/api/v1/plans/$plan_id" "{\"name\":\"G8 Monthly\",\"planType\":\"PLAN_TYPE_MONTHLY\",\"durationDays\":30,\"priceVnd\":999999,\"description\":\"mutated\",\"active\":true}" "$admin2_access" >/dev/null
 [ "$(sql_plans "SELECT price_vnd FROM membership_plans WHERE id = '$plan_id'")" = 999999 ]
 [ "$(sql_member "SELECT price_vnd_snapshot FROM subscriptions WHERE member_id = '$member_id' AND gym_id = '$gym_id'")" = 450000 ]
 [ "$(sql_member "SELECT price_vnd_snapshot FROM pending_purchases WHERE id = '$purchase_id'")" = 450000 ]
