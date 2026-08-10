@@ -41,10 +41,6 @@ services:
         paths: [/api/v1/users/password]
         methods: [POST]
         strip_path: false
-      - name: identifier-protected-select-gym
-        paths: [/api/v1/auth/gym]
-        methods: [POST]
-        strip_path: false
       - name: identifier-protected-trainer
         paths: [/api/v1/admin/trainers]
         methods: [POST]
@@ -58,18 +54,9 @@ services:
         methods: [GET]
         strip_path: false
 
-  # Fixture-only route for gateway membership-policy tests; not a Member API.
-  - name: kong-policy-fixture
-    url: http://mock-upstream:8080
-    routes:
-      - name: fixture-membership-gated
-        paths: [/__fixtures/membership-gated]
-        methods: [POST]
-        strip_path: false
-
   # Native gRPC upstream for public Member RPCs only.
-  # Internal workload methods (GetMembershipStatusByUserId, ValidateMembership,
-  # ListMembersByStatus) must never be routed here; callers use direct mTLS.
+  # Internal workload methods (ValidateMembership and ListMembersByStatus)
+  # must never be routed here; callers use direct mTLS.
   # Upstream client identity must present Kong SAN trusted by Member client CA.
   - name: ms-gym-member-grpc
     url: grpcs://ms-gym-member:50051
@@ -118,11 +105,8 @@ plugins:
         - "^/api/v1/auth/logout$"
         - "^/api/v1/users/me$"
         - "^/api/v1/users/password$"
-        - "^/api/v1/auth/gym$"
         - "^/api/v1/admin/.*"
         - "^/member\\.v1\\.MemberService/(GetMember|UpdateProfile|ListMembers|PurchaseMembership|PauseMembership|ResumeMembership|GetMembershipStatus)$"
-      membership_gated_routes:
-        - "^/__fixtures/membership-gated$"
       redis_host: redis
       redis_port: 6379
       redis_timeout_ms: 50

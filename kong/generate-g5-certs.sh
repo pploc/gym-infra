@@ -30,5 +30,4 @@ issue() {
 }
 
 issue member 'DNS:ms-gym-member' serverAuth
-issue identifier 'DNS:ms-gym-identifier,URI:spiffe://gym.cluster.local/ns/gym-system/sa/ms-gym-identifier' clientAuth
 chmod 600 "$out"/*.key

@@ -3,7 +3,7 @@
 #   -f examples/ms-gym-member-values.yaml -n gym-system
 #
 # Public end-user path: Kong verifies JWT, injects claims, calls Member gRPC over mTLS with Kong SAN.
-# Internal workload path: Identifier / Check-in / Notification call port 50051 directly with method-specific SAN.
+# Internal workload path: Check-in / Notification call port 50051 directly with method-specific SAN.
 # No public HTTP API on Member until a generated gRPC-Gateway exists; internal RPCs are never Kong-routed.
 
 nameOverride: ms-gym-member
@@ -76,13 +76,6 @@ networkPolicy:
       ports:
         - protocol: TCP
           port: 8080
-        - protocol: TCP
-          port: 50051
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: ms-gym-identifier
-      ports:
         - protocol: TCP
           port: 50051
     - from:

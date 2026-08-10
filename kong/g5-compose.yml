@@ -158,8 +158,6 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      ms-gym-member:
-        condition: service_healthy
       kafka:
         condition: service_healthy
       schema-registry:
@@ -170,12 +168,7 @@ services:
       KAFKA_BROKERS: kafka:29092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       JWT_PRIVATE_KEY_PATH: /run/jwt/fixture_rsa.key
-      MEMBER_GRPC_ADDR: ms-gym-member:50051
-      MEMBER_CLIENT_CERT: /run/mtls/identifier.crt
-      MEMBER_CLIENT_KEY: /run/mtls/identifier.key
-      MEMBER_SERVER_CA: /run/mtls/ca.crt
     volumes:
-      - ./g5-certs:/run/mtls:ro
       - ./certs/fixture_rsa.key:/run/jwt/fixture_rsa.key:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/readyz || exit 1"]

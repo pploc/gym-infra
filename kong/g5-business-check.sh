@@ -55,30 +55,17 @@ json_field() {
   python3 -c 'import json, sys; value = json.load(sys.stdin).get(sys.argv[1], ""); assert isinstance(value, (str, int, float, bool)); print(value)' "$field"
 }
 
-assert_neutral_token() {
+assert_identity_token() {
   python3 -c 'import base64, json, sys
 p = sys.stdin.read().strip().split(".")
 assert len(p) == 3
 claims = json.loads(base64.urlsafe_b64decode(p[1] + "=" * (-len(p[1]) % 4)))
-assert claims.get("membership_status") == "NONE"
+assert "membership_status" not in claims
 assert "gym_id" not in claims
 assert isinstance(claims.get("iat"), (int, float))
 assert isinstance(claims.get("jti"), str) and claims["jti"]
 assert claims.get("iss") == "gym-identifier"
 assert claims.get("aud") == "gym-api"'
-}
-
-assert_selected_token() {
-  expected_gym=$1
-  expected_status=$2
-  python3 -c 'import base64, json, sys
-p = sys.stdin.read().strip().split(".")
-assert len(p) == 3
-claims = json.loads(base64.urlsafe_b64decode(p[1] + "=" * (-len(p[1]) % 4)))
-assert claims.get("gym_id") == sys.argv[1]
-assert claims.get("membership_status") == sys.argv[2]
-assert isinstance(claims.get("iat"), (int, float))
-assert isinstance(claims.get("jti"), str) and claims["jti"]' "$expected_gym" "$expected_status"
 }
 
 post_json() {
@@ -99,8 +86,9 @@ authorized_post_json() {
 authorized_status() {
   path=$1
   token=$2
+  method=${3:-GET}
   printf 'Authorization: Bearer %s\n' "$token" >"$header_file"
-  curl -sS -o /dev/null -w '%{http_code}' -H "@$header_file" "http://localhost:8000$path"
+  curl -sS -o /dev/null -w '%{http_code}' -X "$method" -H "@$header_file" "http://localhost:8000$path"
   rm -f "$header_file"
 }
 
@@ -149,7 +137,7 @@ printf '%s\n' "running: $step" >"$status_file"
 verify_response=$(post_json /api/v1/auth/email/verify "{\"verification_token\":\"$verification_token\"}")
 verify_access=$(printf '%s' "$verify_response" | json_field access_token)
 verify_refresh=$(printf '%s' "$verify_response" | json_field refresh_token)
-printf '%s' "$verify_access" | assert_neutral_token
+printf '%s' "$verify_access" | assert_identity_token
 [ -n "$verify_refresh" ]
 
 step='logging in customer'
@@ -157,14 +145,14 @@ printf '%s\n' "running: $step" >"$status_file"
 login_response=$(post_json /api/v1/auth/login "{\"email\":\"$email\",\"password\":\"$password\"}")
 login_access=$(printf '%s' "$login_response" | json_field access_token)
 login_refresh=$(printf '%s' "$login_response" | json_field refresh_token)
-printf '%s' "$login_access" | assert_neutral_token
+printf '%s' "$login_access" | assert_identity_token
 [ -n "$login_refresh" ]
 
 step='refreshing customer token'
 printf '%s\n' "running: $step" >"$status_file"
 refresh_response=$(post_json /api/v1/auth/refresh "{\"refresh_token\":\"$login_refresh\"}")
 refresh_access=$(printf '%s' "$refresh_response" | json_field access_token)
-printf '%s' "$refresh_access" | assert_neutral_token
+printf '%s' "$refresh_access" | assert_identity_token
 
 step='seeding gym memberships'
 printf '%s\n' "running: $step" >"$status_file"
@@ -183,20 +171,9 @@ sql_member "
     ('66666666-6666-6666-6666-666666666666', '$member_id', '44444444-4444-4444-4444-444444444444', '22222222-2222-2222-2222-222222222222', 'PAUSED', CURRENT_DATE, NULL, 30);
 " >/dev/null
 
-active_gym=11111111-1111-1111-1111-111111111111
-paused_gym=22222222-2222-2222-2222-222222222222
-step='selecting active gym over mTLS'
+step='checking retired gym-selection route'
 printf '%s\n' "running: $step" >"$status_file"
-selected_active=$(authorized_post_json /api/v1/auth/gym "{\"gym_id\":\"$active_gym\"}" "$login_access")
-[ "$(printf '%s' "$selected_active" | json_field gym_id)" = "$active_gym" ]
-[ "$(printf '%s' "$selected_active" | json_field membership_status)" = 'ACTIVE' ]
-printf '%s' "$selected_active" | json_field access_token | assert_selected_token "$active_gym" ACTIVE
-step='selecting paused gym over mTLS'
-printf '%s\n' "running: $step" >"$status_file"
-selected_paused=$(authorized_post_json /api/v1/auth/gym "{\"gym_id\":\"$paused_gym\"}" "$login_access")
-[ "$(printf '%s' "$selected_paused" | json_field gym_id)" = "$paused_gym" ]
-[ "$(printf '%s' "$selected_paused" | json_field membership_status)" = 'PAUSED' ]
-printf '%s' "$selected_paused" | json_field access_token | assert_selected_token "$paused_gym" PAUSED
+[ "$(authorized_status /api/v1/auth/gym "$login_access" POST)" = 404 ]
 
 step='logging out customer'
 printf '%s\n' "running: $step" >"$status_file"
@@ -229,4 +206,4 @@ $compose start kafka >/dev/null
 wait_for 'Kafka recovery' "$compose exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null"
 wait_for 'outage outbox recovery' "$compose exec -T identity-postgres psql -U postgres -d identity_db -tAc \"SELECT count(*) FROM outbox_events WHERE key = '$outage_user_id' AND status = 'PUBLISHED'\" | grep -Eq '^[2-9]$|^[1-9][0-9]+$'"
 
-printf '%s\n' 'G5 business checks passed: registration, event projection, verification, neutral tokens, mTLS gym selection, logout blacklist, multi-gym suspension, and outbox recovery.'
+printf '%s\n' 'G5 business checks passed: registration, event projection, verification, identity-only tokens, retired gym-selection route, logout blacklist, multi-gym suspension, and outbox recovery.'

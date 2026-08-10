@@ -16,13 +16,6 @@ local ALLOWED_ROLES = {
   SUPER_ADMIN = true,
 }
 
-local ALLOWED_STATUSES = {
-  NONE = true,
-  ACTIVE = true,
-  PAUSED = true,
-  EXPIRED = true,
-}
-
 local function strip_trusted_headers()
   kong.service.request.clear_header("x-user-id")
   kong.service.request.clear_header("x-user-role")
@@ -39,14 +32,6 @@ local function is_route_in_list(path, list)
     end
   end
   return false
-end
-
-local function is_membership_gated_route(path, list)
-  if is_route_in_list(path, list) then
-    return true
-  end
-  local route = kong.router.get_route()
-  return route and route.name == "fixture-membership-gated"
 end
 
 -- Identifier stores logout keys as blacklist:<sha256_hex(raw_access_token)>.
@@ -110,9 +95,8 @@ function GymJwtClaimsHandler:access(conf)
 
   -- Check if current path/method is protected
   local is_protected = is_route_in_list(path, conf.protected_routes)
-  local is_membership_gated = is_membership_gated_route(path, conf.membership_gated_routes)
 
-  if not is_protected and not is_membership_gated then
+  if not is_protected then
     -- Public route: trusted headers already stripped, pass through
     return
   end
@@ -192,24 +176,9 @@ function GymJwtClaimsHandler:access(conf)
     return kong.response.exit(403, { message = "Forbidden: Missing or invalid role claim" })
   end
 
-  -- Validate membership_status claim
-  local membership_status = claims.membership_status
-  if not membership_status or not ALLOWED_STATUSES[membership_status] then
-    return kong.response.exit(403, { message = "Forbidden: Missing or invalid membership_status claim" })
-  end
-
-  -- Membership gated routes require ACTIVE status
-  if is_membership_gated then
-    if membership_status ~= "ACTIVE" then
-      return kong.response.exit(403, { message = "Forbidden: Active membership required for this route" })
-    end
-  end
-
   -- Inject validated claims into upstream trusted headers
   kong.service.request.set_header("x-user-id", claims.sub)
   kong.service.request.set_header("x-user-role", role)
-  kong.service.request.set_header("x-gym-id", claims.gym_id or "")
-  kong.service.request.set_header("x-membership-status", membership_status)
 
   -- W3C traceparent/tracestate pass through unchanged; public x-trace-id is stripped.
 end

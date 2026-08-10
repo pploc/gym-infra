@@ -25,12 +25,6 @@ return {
               default = {}
             }
           },
-          { membership_gated_routes = {
-              type = "array",
-              elements = { type = "string" },
-              default = {}
-            }
-          },
           -- Optional Redis blacklist (Identifier logout writes blacklist:<sha256(token)>).
           -- Empty host disables the check. No empty-string defaults — Kong rejects them.
           { redis_host = { type = "string", required = false } },

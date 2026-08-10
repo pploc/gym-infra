@@ -65,20 +65,18 @@ func loadPrivateKey(t *testing.T, name string) *rsa.PrivateKey {
 }
 
 type tokenOpts struct {
-	key              *rsa.PrivateKey
-	kid              string
-	alg              string
-	iss              string
-	aud              string
-	sub              string
-	role             string
-	membershipStatus string
-	gymID            string
-	expOffset        time.Duration
-	omitIAT          bool
-	iat              any
-	omitJTI          bool
-	jti              any
+	key       *rsa.PrivateKey
+	kid       string
+	alg       string
+	iss       string
+	aud       string
+	sub       string
+	role      string
+	expOffset time.Duration
+	omitIAT   bool
+	iat       any
+	omitJTI   bool
+	jti       any
 }
 
 func makeToken(t *testing.T, o tokenOpts) string {
@@ -104,25 +102,17 @@ func makeToken(t *testing.T, o tokenOpts) string {
 	if o.role == "" {
 		o.role = "CUSTOMER"
 	}
-	if o.membershipStatus == "" {
-		o.membershipStatus = "NONE"
-	}
-	if o.gymID == "" {
-		o.gymID = "gym-999"
-	}
 	if o.expOffset == 0 {
 		o.expOffset = time.Hour
 	}
 
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"iss":               o.iss,
-		"aud":               o.aud,
-		"sub":               o.sub,
-		"exp":               now.Add(o.expOffset).Unix(),
-		"role":              o.role,
-		"membership_status": o.membershipStatus,
-		"gym_id":            o.gymID,
+		"iss":  o.iss,
+		"aud":  o.aud,
+		"sub":  o.sub,
+		"exp":  now.Add(o.expOffset).Unix(),
+		"role": o.role,
 	}
 	if !o.omitIAT {
 		if o.iat != nil {
@@ -334,7 +324,6 @@ func TestGivenContractRoute_WhenRequestUsesDeclaredMethod_ThenRouteMatches(t *te
 		{http.MethodPost, "/api/v1/auth/logout"},
 		{http.MethodGet, "/api/v1/users/me"},
 		{http.MethodPost, "/api/v1/users/password"},
-		{http.MethodPost, "/api/v1/auth/gym"},
 		{http.MethodPost, "/api/v1/admin/trainers"},
 		{http.MethodPost, "/api/v1/admin/users/example-id/suspend"},
 		{http.MethodGet, "/api/v1/admin/users"},
@@ -372,6 +361,7 @@ func TestGivenContractRoute_WhenRequestUsesDeclaredMethod_ThenRouteMatches(t *te
 func TestGivenIdentifierRoute_WhenWrongHTTPMethod_ThenNoRouteMatches(t *testing.T) {
 	for path, method := range map[string]string{
 		"/api/v1/auth/login":                     http.MethodGet,
+		"/api/v1/auth/gym":                       http.MethodPost,
 		"/api/v1/users/me":                       http.MethodPost,
 		"/api/v1/admin/users/example-id/suspend": http.MethodGet,
 	} {
@@ -394,8 +384,8 @@ func TestProtectedRouteRejectsMissingToken(t *testing.T) {
 	}
 }
 
-func TestProtectedRouteAcceptsValidTokenAndInjectsHeaders(t *testing.T) {
-	tok := makeToken(t, tokenOpts{sub: "user-456", role: "CUSTOMER", membershipStatus: "NONE", gymID: "gym-1"})
+func TestGivenIdentityOnlyToken_WhenProtectedRoute_ThenInjectsIdentityAndRoleOnly(t *testing.T) {
+	tok := makeToken(t, tokenOpts{sub: "user-456", role: "CUSTOMER"})
 	status, cap, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + tok,
 	}, nil)
@@ -408,20 +398,21 @@ func TestProtectedRouteAcceptsValidTokenAndInjectsHeaders(t *testing.T) {
 	if got := headerCI(cap.Headers, "x-user-role"); got != "CUSTOMER" {
 		t.Fatalf("x-user-role=%q", got)
 	}
-	if got := headerCI(cap.Headers, "x-gym-id"); got != "gym-1" {
+	if got := headerCI(cap.Headers, "x-gym-id"); got != "" {
 		t.Fatalf("x-gym-id=%q", got)
 	}
-	if got := headerCI(cap.Headers, "x-membership-status"); got != "NONE" {
+	if got := headerCI(cap.Headers, "x-membership-status"); got != "" {
 		t.Fatalf("x-membership-status=%q", got)
 	}
 }
 
-func TestProtectedRouteStripsSpoofedHeadersAndInjectsClaims(t *testing.T) {
-	tok := makeToken(t, tokenOpts{sub: "user-real", role: "CUSTOMER", membershipStatus: "NONE"})
+func TestGivenSpoofedRetiredHeaders_WhenProtectedRoute_ThenStripsThemAndInjectsIdentity(t *testing.T) {
+	tok := makeToken(t, tokenOpts{sub: "user-real", role: "CUSTOMER"})
 	status, cap, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization":       "Bearer " + tok,
 		"x-user-id":           "spoofed-user",
 		"x-user-role":         "SUPER_ADMIN",
+		"x-gym-id":            "spoofed-gym",
 		"x-membership-status": "ACTIVE",
 	}, nil)
 	if status != 200 {
@@ -433,7 +424,10 @@ func TestProtectedRouteStripsSpoofedHeadersAndInjectsClaims(t *testing.T) {
 	if got := headerCI(cap.Headers, "x-user-role"); got != "CUSTOMER" {
 		t.Fatalf("x-user-role=%q", got)
 	}
-	if got := headerCI(cap.Headers, "x-membership-status"); got != "NONE" {
+	if got := headerCI(cap.Headers, "x-gym-id"); got != "" {
+		t.Fatalf("x-gym-id=%q", got)
+	}
+	if got := headerCI(cap.Headers, "x-membership-status"); got != "" {
 		t.Fatalf("x-membership-status=%q", got)
 	}
 }
@@ -504,8 +498,8 @@ func TestExpiredTokenRejected(t *testing.T) {
 	}
 }
 
-func TestGivenNoneStatus_WhenOrdinaryProtectedRoute_ThenAccepted(t *testing.T) {
-	token := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: "NONE"})
+func TestGivenIdentityOnlyToken_WhenOrdinaryProtectedRoute_ThenAccepted(t *testing.T) {
+	token := makeToken(t, tokenOpts{role: "CUSTOMER"})
 	status, _, _ := doRequest(t, http.MethodGet, "/api/v1/users/me", map[string]string{
 		"Authorization": "Bearer " + token,
 	}, nil)
@@ -514,25 +508,10 @@ func TestGivenNoneStatus_WhenOrdinaryProtectedRoute_ThenAccepted(t *testing.T) {
 	}
 }
 
-func TestGivenMembershipGatedFixture_WhenStatusIsNotActive_ThenForbidden(t *testing.T) {
-	for _, membershipStatus := range []string{"NONE", "EXPIRED"} {
-		token := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: membershipStatus})
-		status, _, _ := doRequest(t, http.MethodPost, "/__fixtures/membership-gated", map[string]string{
-			"Authorization": "Bearer " + token,
-		}, nil)
-		if status != http.StatusForbidden {
-			t.Fatalf("status=%d for %s want %d", status, membershipStatus, http.StatusForbidden)
-		}
-	}
-	token := makeToken(t, tokenOpts{role: "CUSTOMER", membershipStatus: "ACTIVE"})
-	status, cap, _ := doRequest(t, http.MethodPost, "/__fixtures/membership-gated", map[string]string{
-		"Authorization": "Bearer " + token,
-	}, nil)
-	if status != http.StatusOK {
-		t.Fatalf("status=%d want %d", status, http.StatusOK)
-	}
-	if got := headerCI(cap.Headers, "x-membership-status"); got != "ACTIVE" {
-		t.Fatalf("x-membership-status=%q", got)
+func TestGivenRetiredMembershipFixturePath_WhenRequested_ThenNoRouteMatches(t *testing.T) {
+	status, _, _ := doRequest(t, http.MethodPost, "/__fixtures/membership-gated", nil, nil)
+	if status != http.StatusNotFound {
+		t.Fatalf("status=%d want %d", status, http.StatusNotFound)
 	}
 }
 
@@ -575,15 +554,13 @@ func TestAlgorithmNoneRejected(t *testing.T) {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT","kid":"current"}`))
 	now := time.Now().Unix()
 	payloadObj := map[string]any{
-		"iss":               "gym-identifier",
-		"aud":               "gym-api",
-		"sub":               "user-none",
-		"iat":               now,
-		"exp":               now + 3600,
-		"jti":               "none-jti",
-		"role":              "CUSTOMER",
-		"membership_status": "NONE",
-		"gym_id":            "gym-1",
+		"iss":  "gym-identifier",
+		"aud":  "gym-api",
+		"sub":  "user-none",
+		"iat":  now,
+		"exp":  now + 3600,
+		"jti":  "none-jti",
+		"role": "CUSTOMER",
 	}
 	pb, _ := json.Marshal(payloadObj)
 	payload := base64.RawURLEncoding.EncodeToString(pb)
@@ -593,13 +570,6 @@ func TestAlgorithmNoneRejected(t *testing.T) {
 	}, nil)
 	if status != 401 {
 		t.Fatalf("status=%d want 401", status)
-	}
-}
-
-func TestInternalMembershipRPCUnreachable(t *testing.T) {
-	status, _, _ := doRequest(t, http.MethodPost, "/member.v1.MemberService/GetMembershipStatusByUserId", nil, nil)
-	if status != 404 {
-		t.Fatalf("status=%d want 404", status)
 	}
 }
 
