@@ -2,9 +2,9 @@
 # helm upgrade --install ms-gym-member ./helm/gym-service \
 #   -f examples/ms-gym-member-values.yaml -n gym-system
 #
-# Public end-user path: Kong verifies JWT, injects claims, calls Member gRPC over mTLS with Kong SAN.
+# Public end-user path: Kong verifies JWT, injects claims, then mTLS forwards to generated gateway and Member gRPC.
 # Internal workload path: Check-in / Notification call port 50051 directly with method-specific SAN.
-# No public HTTP API on Member until a generated gRPC-Gateway exists; internal RPCs are never Kong-routed.
+# Member HTTP 8080 remains health/metrics only; internal RPCs are never Kong-routed.
 
 nameOverride: ms-gym-member
 
@@ -56,26 +56,15 @@ istio:
 ingress:
   enabled: false
 
-# NetworkPolicy: Kong + workloads may reach gRPC only; HTTP is actuator/health only.
+# NetworkPolicy: each caller is bound to one purpose/port; Identifier has no Member edge.
 networkPolicy:
   enabled: true
   ingress:
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes: istio-system
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: kong
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: ms-gym-gateway
-        - podSelector:
-            matchLabels:
-              istio: ingressgateway
+              app.kubernetes.io/name: ms-gym-api-gateway
       ports:
-        - protocol: TCP
-          port: 8080
         - protocol: TCP
           port: 50051
     - from:
@@ -92,6 +81,15 @@ networkPolicy:
       ports:
         - protocol: TCP
           port: 50051
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 9090
 
 env:
   - name: ENV

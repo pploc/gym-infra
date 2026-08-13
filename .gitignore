@@ -29,3 +29,11 @@ kong/g8-certs/
 kong/g8-last-run.log
 kong/g8-business-status
 kong/g8-private/
+kong/g9-certs/
+kong/g9-proto/
+kong/g9-rendered-kong.yml
+kong/g9-last-run.log
+kong/g9-business-status
+kong/g9-private/
+kong/g9-observed-errors.yaml
+kong/generated-gateway/proto-go/

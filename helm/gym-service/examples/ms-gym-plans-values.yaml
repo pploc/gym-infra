@@ -2,8 +2,8 @@
 # helm upgrade --install ms-gym-plans ./helm/gym-service \
 #   -f examples/ms-gym-plans-values.yaml -n gym-system
 #
-# Public catalog HTTP: 8080 (Kong). Internal workload gRPC: 50051 (mTLS).
-# Plans has no Kafka / Schema Registry / Redis / outbox configuration.
+# Public catalog path: Kong HTTPS/JSON reaches generated gateway before Plans gRPC 50051 over mTLS.
+# Plans MVC remains during Stage 3 comparison, but Kong has no 8080 business edge.
 
 nameOverride: ms-gym-plans
 
@@ -55,26 +55,17 @@ istio:
 ingress:
   enabled: false
 
-# NetworkPolicy: Kong → HTTP only; Identifier/Member → gRPC only; no broad gRPC ingress.
+# NetworkPolicy: Kong, Identifier, and Member each get only gRPC; observers get health/metrics.
 networkPolicy:
   enabled: true
   ingress:
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes: istio-system
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: kong
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: ms-gym-gateway
-        - podSelector:
-            matchLabels:
-              istio: ingressgateway
+              app.kubernetes.io/name: ms-gym-api-gateway
       ports:
         - protocol: TCP
-          port: 8080
+          port: 50051
     - from:
         - podSelector:
             matchLabels:
@@ -89,6 +80,15 @@ networkPolicy:
       ports:
         - protocol: TCP
           port: 50051
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 9090
 
 env:
   - name: ENV

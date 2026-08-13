@@ -54,6 +54,15 @@ services:
         methods: [GET]
         strip_path: false
 
+  # Fixture-only route for method-aware JWT and OPTIONS tests.
+  - name: kong-method-policy-fixture
+    url: http://mock-upstream:8080
+    routes:
+      - name: fixture-method-aware
+        paths: [/__fixtures/method-aware]
+        methods: [GET, POST, OPTIONS]
+        strip_path: false
+
   # Native gRPC upstream for public Member RPCs only.
   # Internal workload methods (ValidateMembership and ListMembersByStatus)
   # must never be routed here; callers use direct mTLS.
@@ -101,12 +110,21 @@ plugins:
           L/wq/sVBYT5tmR9rynPrvz5sWC5s1CJ13q4A/HTafNGpyl5eUBJiuI+NfpQUaOiR
           VQIDAQAB
           -----END PUBLIC KEY-----
-      protected_routes:
-        - "^/api/v1/auth/logout$"
-        - "^/api/v1/users/me$"
-        - "^/api/v1/users/password$"
-        - "^/api/v1/admin/.*"
-        - "^/member\\.v1\\.MemberService/(GetMember|UpdateProfile|ListMembers|PurchaseMembership|PauseMembership|ResumeMembership|GetMembershipStatus)$"
+      protected_http_routes:
+        - method: POST
+          path_regex: "^/api/v1/auth/logout$"
+        - method: GET
+          path_regex: "^/api/v1/users/me$"
+        - method: POST
+          path_regex: "^/api/v1/users/password$"
+        - method: POST
+          path_regex: "^/api/v1/admin/trainers$"
+        - method: POST
+          path_regex: "^/api/v1/admin/users/[^/]+/suspend$"
+        - method: GET
+          path_regex: "^/api/v1/admin/users$"
+        - method: GET
+          path_regex: "^/__fixtures/method-aware$"
       redis_host: redis
       redis_port: 6379
       redis_timeout_ms: 50

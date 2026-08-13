@@ -24,7 +24,17 @@ local function strip_trusted_headers()
   kong.service.request.clear_header("x-trace-id")
 end
 
-local function is_route_in_list(path, list)
+local function is_route_in_list(method, path, list)
+  if not list then return false end
+  for _, route in ipairs(list) do
+    if method == route.method and ngx.re.find(path, route.path_regex, "jo") then
+      return true
+    end
+  end
+  return false
+end
+
+local function is_legacy_route_in_list(path, list)
   if not list then return false end
   for _, pattern in ipairs(list) do
     if path:find(pattern) then
@@ -89,12 +99,19 @@ end
 
 function GymJwtClaimsHandler:access(conf)
   local path = kong.request.get_path()
+  local method = kong.request.get_method()
 
   -- Step 1: Always strip incoming trusted headers from untrusted client
   strip_trusted_headers()
 
-  -- Check if current path/method is protected
-  local is_protected = is_route_in_list(path, conf.protected_routes)
+  -- CORS preflight never requires JWT; the route-level CORS plugin decides policy.
+  if method == "OPTIONS" then
+    return
+  end
+
+  -- Check if the exact current method/path is protected.
+  local is_protected = is_route_in_list(method, path, conf.protected_http_routes)
+    or is_legacy_route_in_list(path, conf.protected_routes)
 
   if not is_protected then
     -- Public route: trusted headers already stripped, pass through

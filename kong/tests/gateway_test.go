@@ -358,6 +358,38 @@ func TestGivenContractRoute_WhenRequestUsesDeclaredMethod_ThenRouteMatches(t *te
 	}
 }
 
+func TestGivenMethodAwareProtectedEntry_WhenSamePathUsesDifferentMethods_ThenOnlyDeclaredMethodRequiresJWT(t *testing.T) {
+	// given
+	path := "/__fixtures/method-aware"
+
+	// when
+	getStatus, _, _ := doRequest(t, http.MethodGet, path, nil, nil)
+	postStatus, postCapture, _ := doRequest(t, http.MethodPost, path, map[string]string{
+		"x-user-id":   "spoofed",
+		"x-user-role": "SUPER_ADMIN",
+	}, nil)
+	optionsStatus, optionsCapture, _ := doRequest(t, http.MethodOptions, path, map[string]string{
+		"x-user-id": "spoofed",
+	}, nil)
+
+	// then
+	if getStatus != http.StatusUnauthorized {
+		t.Fatalf("GET status=%d want %d", getStatus, http.StatusUnauthorized)
+	}
+	if postStatus != http.StatusOK {
+		t.Fatalf("POST status=%d want %d", postStatus, http.StatusOK)
+	}
+	if got := headerCI(postCapture.Headers, "x-user-id"); got != "" {
+		t.Fatalf("POST leaked x-user-id=%q", got)
+	}
+	if optionsStatus != http.StatusOK {
+		t.Fatalf("OPTIONS status=%d want %d", optionsStatus, http.StatusOK)
+	}
+	if got := headerCI(optionsCapture.Headers, "x-user-id"); got != "" {
+		t.Fatalf("OPTIONS leaked x-user-id=%q", got)
+	}
+}
+
 func TestGivenIdentifierRoute_WhenWrongHTTPMethod_ThenNoRouteMatches(t *testing.T) {
 	for path, method := range map[string]string{
 		"/api/v1/auth/login":                     http.MethodGet,

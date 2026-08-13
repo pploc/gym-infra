@@ -19,9 +19,22 @@ return {
           },
           { issuer = { type = "string", default = "gym-identifier" } },
           { audience = { type = "string", default = "gym-api" } },
+          -- Kept only so historical G8 declarative fixtures remain loadable.
           { protected_routes = {
               type = "array",
               elements = { type = "string" },
+              default = {}
+            }
+          },
+          { protected_http_routes = {
+              type = "array",
+              elements = {
+                type = "record",
+                fields = {
+                  { method = { type = "string", required = true, one_of = { "GET", "POST", "PUT", "PATCH", "DELETE" } } },
+                  { path_regex = { type = "string", required = true } },
+                },
+              },
               default = {}
             }
           },

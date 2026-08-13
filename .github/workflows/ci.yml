@@ -69,6 +69,31 @@ jobs:
           python3 -c "import yaml; yaml.safe_load(open('config/central/application-global.yml'))"
           echo "application-global.yml valid"
 
+  stage-3-static:
+    name: Stage 3 static gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: kong/tests/go.mod
+          cache-dependency-path: kong/tests/go.sum
+      - name: Install YAML parser
+        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
+      - name: Assert exact NetworkPolicies
+        run: helm/gym-service/tests/networkpolicy_test.sh
+      - name: Check Stage 3 scripts and Compose
+        run: |
+          set -euo pipefail
+          sh -n kong/run-g9.sh kong/g9-business-check.sh kong/g9-compatibility-check.sh
+          python3 -m py_compile kong/render-g9-config.py
+          docker compose -f kong/docker-compose.yml config --quiet
+          docker compose -f kong/g9-compose.yml config --quiet
+          (cd kong/tests && go test -run '^$' ./...)
+
   docker-go-sample:
     name: Docker go-service (push on branch)
     needs: [go-sample]
