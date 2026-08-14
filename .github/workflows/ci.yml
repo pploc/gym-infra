@@ -116,7 +116,7 @@ jobs:
       contents: read
       packages: write
     secrets:
-      github_token: ${{ secrets.GITHUB_TOKEN }}
+      github_token: ${{ github.token }}
 
   docker-java-sample:
     name: Docker java-service (push on branch)
@@ -138,4 +138,4 @@ jobs:
       contents: read
       packages: write
     secrets:
-      github_token: ${{ secrets.GITHUB_TOKEN }}
+      github_token: ${{ github.token }}
