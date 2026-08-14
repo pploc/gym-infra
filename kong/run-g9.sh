@@ -3,6 +3,7 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 workspace=$(mktemp -d "${TMPDIR:-/tmp}/gym-g9.XXXXXX")
+rmdir "$workspace"
 proto_root=
 g9_compose="docker compose -f $root/g9-compose.yml"
 plugin_compose="docker compose -f $root/docker-compose.yml"
