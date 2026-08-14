@@ -291,7 +291,7 @@ services:
       retries: 30
 
   kong:
-    image: kong:3.8-ubuntu
+    image: kong:3.8-ubuntu@sha256:250cc9745fde8ce04be060bc8e4338dfc280f54986cb38ef24d03876cb6b6e2f
     depends_on:
       redis:
         condition: service_healthy

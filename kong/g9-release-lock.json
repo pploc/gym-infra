@@ -1,0 +1,30 @@
+{
+  "gymProto": {
+    "version": "v6.0.0",
+    "sourceSha": "80e41f2ffe074df13866458d04b63d2263d00c3c",
+    "releaseUrl": "https://github.com/pploc/gym-proto/releases/tag/v6.0.0"
+  },
+  "artifacts": {
+    "kongProto": {
+      "url": "https://github.com/pploc/gym-proto/releases/download/v6.0.0/kong-proto-6.0.0.tar.gz",
+      "sha256": "1983b106c2c6a82240371937d4833d970f2bf02a2a9fab38886a487cf1204fe6"
+    },
+    "openApi": {
+      "identity": "e4ccd7b30d11a054ad252256509bdfc1145d7d17ef6935eea6d8132b4b352dbc",
+      "member": "ebbf8008d2a6e170af69b56bcaf3c3a04c81aeead98d3edf4d7bc8bbebe9cd96",
+      "plans": "f7db14a9cebd8931b63dc2b95342f32210ecf976d41a4dcd13a07a15428393df"
+    }
+  },
+  "dependencies": {
+    "javaProto": "6.0.0",
+    "goProto": "v1.6.0"
+  },
+  "kong": {
+    "image": "kong:3.8-ubuntu@sha256:250cc9745fde8ce04be060bc8e4338dfc280f54986cb38ef24d03876cb6b6e2f"
+  },
+  "routes": {
+    "count": 27,
+    "manifestSha256": "b163aa46a2f4351fdf47d810e937161f6e5abd5df12acc52a3a4c86fce37654d",
+    "templateSha256": "474c9d86613455ecdfbac21294a3eeb37d637ebd7644e3050fdbfa74984382af"
+  }
+}

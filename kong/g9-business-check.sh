@@ -180,6 +180,12 @@ gateway_handshake_fails() {
   }
 }
 
+# Given direct Plans HTTP, when business and actuator paths are requested, then only Actuator remains on port 8080.
+mark 'Plans direct HTTP isolation and Actuator probes'
+[ "$(docker run --rm --network "$network" curlimages/curl:8.10.1 -sS -o /dev/null -w '%{http_code}' http://ms-gym-plans:8080/api/v1/gyms)" = 404 ]
+[ "$(docker run --rm --network "$network" curlimages/curl:8.10.1 -sS -o /dev/null -w '%{http_code}' http://ms-gym-plans:8080/actuator/health/liveness)" = 200 ]
+[ "$(docker run --rm --network "$network" curlimages/curl:8.10.1 -sS -o /dev/null -w '%{http_code}' http://ms-gym-plans:8080/actuator/health/readiness)" = 200 ]
+
 # Given every manifest route, when its public operation is exercised below, then the real service owns the result.
 mark 'starting verification token capture'
 capture_container=g9-token-capture
