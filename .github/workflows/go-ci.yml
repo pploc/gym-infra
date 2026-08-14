@@ -50,11 +50,11 @@ jobs:
           cache-dependency-path: ${{ inputs.service_path }}/go.sum
 
       - name: Configure private Go modules
-        if: secrets.github_token != ''
         env:
           GITHUB_TOKEN: ${{ secrets.github_token }}
         run: |
           set -euo pipefail
+          [ -n "$GITHUB_TOKEN" ] || exit 0
           export GOPRIVATE=github.com/pploc/*
           export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/gym-private-modules.gitconfig"
           umask 077

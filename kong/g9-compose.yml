@@ -136,6 +136,10 @@ services:
   fake-payment:
     build:
       context: ./fixtures/fake-payment
+      secrets:
+        - source: github_token
+          target: github_token
+          mode: 0400
     depends_on:
       kafka:
         condition: service_healthy

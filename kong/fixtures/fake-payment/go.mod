@@ -4,12 +4,12 @@ go 1.26.5
 
 require (
 	github.com/pploc/common-go v0.4.0
-	github.com/pploc/proto-go v1.4.0
+	github.com/pploc/proto-go v1.6.1
 	google.golang.org/grpc v1.83.0
 )
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260709200747-435963d16310.1 // indirect
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260709200747-435963d16310.1 // indirect
 	buf.build/go/protovalidate v1.2.0 // indirect
 	cel.dev/expr v0.25.2 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.22.0 // indirect
@@ -47,7 +47,7 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto v0.0.0-20240325203815-454cdb8f5daa // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260810153831-ec0a7760b754 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260807164820-c8921c73eeea // indirect
+	google.golang.org/protobuf v1.36.12 // indirect
 )
