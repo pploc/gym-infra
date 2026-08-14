@@ -100,6 +100,12 @@ for module in (identifier_root, root / "generated-gateway", root / "fixtures/fak
     require(listing.endswith(lock["dependencies"]["goProto"]), f"{module} does not use released Go contract")
     require("replace github.com/pploc/proto-go" not in (module / "go.mod").read_text(), f"{module} has local Go contract replacement")
 
+gateway = lock["gateway"]
+require(sha256(root / "generated-gateway/go.mod") == gateway["goModSha256"], "gateway go.mod checksum mismatch")
+require(sha256(root / "generated-gateway/go.sum") == gateway["goSumSha256"], "gateway go.sum checksum mismatch")
+require(sha256(root / "fixtures/fake-payment/go.mod") == gateway["fakePaymentGoModSha256"], "fake payment go.mod checksum mismatch")
+require(sha256(root / "fixtures/fake-payment/go.sum") == gateway["fakePaymentGoSumSha256"], "fake payment go.sum checksum mismatch")
+
 kong_proto = lock["artifacts"]["kongProto"]
 assets = {Path(urlparse(kong_proto["url"]).path).name: (kong_proto["url"], kong_proto["sha256"])}
 assets.update({
@@ -130,6 +136,13 @@ tar -xzf "$1" -C "$root/g9-proto" --strip-components=1
   --manifest "$proto_root/contracts/v1/http/active-operations.yaml" \
   --template "$root/g9-kong-template.yml" \
   --cert-dir "$root/g9-certs" --output "$root/g9-rendered-kong.yml"
+G9_GATEWAY_IMAGE=$(python3 - "$lock" <<'PY'
+import json
+import sys
+print(json.load(open(sys.argv[1]))["gateway"]["image"])
+PY
+)
+export G9_GATEWAY_IMAGE
 $g9_compose config >/dev/null || failed
 BUILDKIT_PROGRESS=quiet $g9_compose up -d --build || failed
 

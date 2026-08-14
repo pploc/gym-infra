@@ -93,7 +93,7 @@ jobs:
           python3 kong/validate-g9-lock.py kong/g9-release-lock.json
           python3 -m unittest kong/materialize-g9_test.py kong/validate-g9-lock_test.py kong/sanitize-g9-evidence_test.py
           docker compose -f kong/docker-compose.yml config --quiet
-          G9_PROTO_ROOT=/tmp/g9-proto G9_IDENTIFIER_ROOT=/tmp/g9-identifier G9_MEMBER_ROOT=/tmp/g9-member G9_PLANS_ROOT=/tmp/g9-plans docker compose -f kong/g9-compose.yml config --quiet
+          G9_PROTO_ROOT=/tmp/g9-proto G9_IDENTIFIER_ROOT=/tmp/g9-identifier G9_MEMBER_ROOT=/tmp/g9-member G9_PLANS_ROOT=/tmp/g9-plans G9_GATEWAY_IMAGE=ghcr.io/pploc/ms-gym-api-gateway@sha256:$(printf '0%.0s' $(seq 1 64)) docker compose -f kong/g9-compose.yml config --quiet
           (cd kong/tests && go test -run '^$' ./...)
 
   docker-go-sample:

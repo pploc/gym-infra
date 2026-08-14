@@ -32,13 +32,19 @@ class ValidateG9LockTest(unittest.TestCase):
     def test_given_malformed_canonical_openapi_when_validated_then_reject(self):
         # given
         lock = json.loads((ROOT / "g9-release-lock.json").read_text())
-        lock["artifacts"]["canonicalOpenApi"] = {
-            "url": "https://github.com/pploc/gym-proto/releases/download/v6.0.1/gym-active-api.openapi.yaml",
-            "sha256": "not-a-checksum",
-        }
+        lock["artifacts"]["canonicalOpenApi"]["sha256"] = "not-a-checksum"
 
         # when / then
         with self.assertRaisesRegex(ValueError, "canonical OpenAPI checksum"):
+            VALIDATE.given_g9_lock_when_validated_then_require_immutable_inputs(lock)
+
+    def test_given_mutable_gateway_image_when_validated_then_reject(self):
+        # given
+        lock = json.loads((ROOT / "g9-release-lock.json").read_text())
+        lock["gateway"]["image"] = "ghcr.io/pploc/ms-gym-api-gateway:develop"
+
+        # when / then
+        with self.assertRaisesRegex(ValueError, "gateway image must be digest pinned"):
             VALIDATE.given_g9_lock_when_validated_then_require_immutable_inputs(lock)
 
 

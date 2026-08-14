@@ -1,42 +1,54 @@
 {
   "lockVersion": 2,
   "gymProto": {
-    "version": "v6.0.0",
-    "sourceSha": "80e41f2ffe074df13866458d04b63d2263d00c3c",
-    "releaseUrl": "https://github.com/pploc/gym-proto/releases/tag/v6.0.0"
+    "version": "v6.0.1",
+    "sourceSha": "7f887b99503353b3c6a3066361ff5b36d44b6811",
+    "releaseUrl": "https://github.com/pploc/gym-proto/releases/tag/v6.0.1"
   },
   "repositories": {
     "gymProto": {
       "url": "https://github.com/pploc/gym-proto.git",
-      "sha": "80e41f2ffe074df13866458d04b63d2263d00c3c"
+      "sha": "7f887b99503353b3c6a3066361ff5b36d44b6811"
     },
     "identifier": {
       "url": "https://github.com/pploc/ms-gym-identifier.git",
-      "sha": "ab254829ec340406bc5336eebf786670c6667ce3"
+      "sha": "702e16f89c1d9473f61546dc97bb1e72ab78caad"
     },
     "member": {
       "url": "https://github.com/pploc/ms-gym-member.git",
-      "sha": "f530ceffbcbe1f94af01afc3f3709d2c01a128a5"
+      "sha": "378feaa64b11e89f785ca7b6ff606df2f9c578cf"
     },
     "plans": {
       "url": "https://github.com/pploc/ms-gym-plans.git",
-      "sha": "5822664483bc6201b1af9710d77085e6d66a7a46"
+      "sha": "81cc95da139b101e98bb49845c6807dc19ac8389"
     }
   },
   "artifacts": {
     "kongProto": {
-      "url": "https://github.com/pploc/gym-proto/releases/download/v6.0.0/kong-proto-6.0.0.tar.gz",
+      "url": "https://github.com/pploc/gym-proto/releases/download/v6.0.1/kong-proto-6.0.1.tar.gz",
       "sha256": "1983b106c2c6a82240371937d4833d970f2bf02a2a9fab38886a487cf1204fe6"
     },
     "openApi": {
-      "identity": "e4ccd7b30d11a054ad252256509bdfc1145d7d17ef6935eea6d8132b4b352dbc",
-      "member": "ebbf8008d2a6e170af69b56bcaf3c3a04c81aeead98d3edf4d7bc8bbebe9cd96",
-      "plans": "f7db14a9cebd8931b63dc2b95342f32210ecf976d41a4dcd13a07a15428393df"
+      "identity": "faf3c4760dee947c36de1f36115a4740250262d8d406c914cfcf3307fc21a22f",
+      "member": "f300c6bdc01049d8b3bf6ab87d5097facadef7fad4389bd9a59c2f49a22d0251",
+      "plans": "9026f8f1bb0ca9b2609d04a7eb6c5f0ee1d4b25551d9e4b0d4a5ec485d2da384"
+    },
+    "canonicalOpenApi": {
+      "url": "https://github.com/pploc/gym-proto/releases/download/v6.0.1/gym-active-api.openapi.yaml",
+      "sha256": "e44d585c59b25b6962b86810083a3d0cc53e05a0c4618cdfee8f539fc4276fa3"
     }
   },
   "dependencies": {
-    "javaProto": "6.0.0",
-    "goProto": "v1.6.0"
+    "javaProto": "6.0.1",
+    "goProto": "v1.6.1"
+  },
+  "gateway": {
+    "sourceCommit": "75d455e7452f2273c46ca6cf72bb03427a71060d",
+    "goModSha256": "2b62bc540e2da25bd440968070c4ad5e084d75a9c42b42a86fd5eb61e75acff9",
+    "goSumSha256": "2703cebe11509db4870f7c2f650d757291907cd5c9696c25ac03a29497d511d8",
+    "fakePaymentGoModSha256": "e43846c03f6af9e40f1ae1d56cfd3f6c5694f1a34a0f95e1e24fffa571646f73",
+    "fakePaymentGoSumSha256": "9c1c6ecb62b5ac8d80c8cb680e4fd055e6fa2de7f1e37f203827126bede8cf3f",
+    "image": "ghcr.io/pploc/ms-gym-api-gateway@sha256:b3cb6ff8be5b0d760b6b527ca267c90d1596eaa499a4c16ee147725943c8f21d"
   },
   "kong": {
     "image": "kong:3.8-ubuntu@sha256:250cc9745fde8ce04be060bc8e4338dfc280f54986cb38ef24d03876cb6b6e2f"

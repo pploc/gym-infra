@@ -36,10 +36,16 @@ def given_g9_lock_when_validated_then_require_immutable_inputs(lock: dict) -> No
 
     artifacts = lock.get("artifacts", {})
     canonical_openapi = artifacts.get("canonicalOpenApi")
-    if canonical_openapi is not None:
-        require(isinstance(canonical_openapi, dict), "canonical OpenAPI artifact is invalid")
-        require(isinstance(canonical_openapi.get("url"), str) and canonical_openapi["url"].startswith("https://github.com/"), "canonical OpenAPI URL is invalid")
-        require(SHA256.fullmatch(canonical_openapi.get("sha256", "")) is not None, "canonical OpenAPI checksum is invalid")
+    require(isinstance(canonical_openapi, dict), "canonical OpenAPI artifact is required")
+    require(isinstance(canonical_openapi.get("url"), str) and canonical_openapi["url"].startswith("https://github.com/"), "canonical OpenAPI URL is invalid")
+    require(SHA256.fullmatch(canonical_openapi.get("sha256", "")) is not None, "canonical OpenAPI checksum is invalid")
+
+    gateway = lock.get("gateway", {})
+    require(GIT_SHA.fullmatch(gateway.get("sourceCommit", "")) is not None, "gateway source commit is invalid")
+    require(isinstance(gateway.get("image"), str) and "@sha256:" in gateway["image"], "gateway image must be digest pinned")
+    require(SHA256.fullmatch(gateway["image"].split("@sha256:")[-1]) is not None, "gateway image digest is invalid")
+    for key in ("goModSha256", "goSumSha256", "fakePaymentGoModSha256", "fakePaymentGoSumSha256"):
+        require(SHA256.fullmatch(gateway.get(key, "")) is not None, f"gateway {key} is invalid")
 
     dependencies = lock.get("dependencies", {})
     require(re.fullmatch(r"\d+\.\d+\.\d+", dependencies.get("javaProto", "")) is not None, "Java contract version is invalid")

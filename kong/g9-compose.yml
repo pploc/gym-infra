@@ -268,12 +268,7 @@ services:
       retries: 30
 
   ms-gym-api-gateway:
-    build:
-      context: ./generated-gateway
-      secrets:
-        - source: github_token
-          target: github_token
-          mode: 0400
+    image: ${G9_GATEWAY_IMAGE:?G9_GATEWAY_IMAGE is required}
     depends_on:
       ms-gym-plans:
         condition: service_healthy
