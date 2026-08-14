@@ -16,6 +16,7 @@ lock=$root/g9-release-lock.json
 cleanup() {
   $g9_compose down --remove-orphans >/dev/null 2>&1 || true
   $plugin_compose down --remove-orphans >/dev/null 2>&1 || true
+  docker logout ghcr.io >/dev/null 2>&1 || true
   rm -f "$paths"
   rm -rf "$workspace" "$root/g9-certs" "$root/g9-proto" "$root/g9-release-assets" "$root/g9-rendered-kong.yml" \
     "$root/g9-private" "$root/g9-business-status"
@@ -143,6 +144,7 @@ print(json.load(open(sys.argv[1]))["gateway"]["image"])
 PY
 )
 export G9_GATEWAY_IMAGE
+printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "${GITHUB_ACTOR:-x-access-token}" --password-stdin >/dev/null || failed
 $g9_compose config >/dev/null || failed
 BUILDKIT_PROGRESS=quiet $g9_compose up -d --build || failed
 
