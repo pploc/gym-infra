@@ -102,14 +102,13 @@ services:
         condition: service_completed_successfully
       schema-registry:
         condition: service_healthy
-    working_dir: /tmp/gym-proto
+    working_dir: /source
     environment:
       GRADLE_USER_HOME: /tmp/gradle
     volumes:
       - ${G9_PROTO_ROOT:?G9_PROTO_ROOT is required}:/source:ro
     command: >-
-      sh -ec 'cp -R /source/. /tmp/gym-proto &&
-      ./gradlew seedConfluentSchemas -PschemaRegistryUrl=http://schema-registry:8081 --no-daemon'
+      sh -ec './gradlew seedConfluentSchemas -PschemaRegistryUrl=http://schema-registry:8081 --no-daemon'
 
   identifier-migrate:
     image: postgres:16-alpine
