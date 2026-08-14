@@ -1,8 +1,50 @@
 # Kong fixture environment
 
-DB-less local Kong trust-boundary fixture for Phase 5 Part A.
+DB-less local Kong trust-boundary fixture. `docker-compose.yml` and `run-g5.sh` remain historical Phase 5 inputs. G9 uses a separate locked fixture.
 
-## Quick start
+## G9 selected topology
+
+```text
+Browser HTTPS/JSON
+  -> Kong JWT/CORS/exact routes
+  -> mTLS generated Go grpc-gateway :8443
+  -> mTLS Member and Plans gRPC :50051
+```
+
+Kong remains browser entry point and Identity HTTP upstream owner. It does not parse Protobuf or directly reach Member/Plans public gRPC methods. Kong 3.8 source-Protobuf `grpc-gateway` parsing failed on `buf/validate/validate.proto:535:9: field name expected`; do not restore that path.
+
+Generated gateway accepts trusted identity/role metadata only from Kong SAN, then forwards vetted values to Member/Plans with `ms-gym-api-gateway` client identity. It registers only public generated routes, not workload-only RPCs.
+
+## Locked G9 run
+
+`g9-release-lock.json` is authoritative. `run-g9.sh` validates it and calls `materialize-g9.py`, which clones `gym-proto`, Identifier, Member, and Plans at exact detached commits into a temporary mode-`0700` workspace. Compose receives only materialized paths through `G9_PROTO_ROOT`, `G9_IDENTIFIER_ROOT`, `G9_MEMBER_ROOT`, and `G9_PLANS_ROOT`.
+
+```bash
+./run-g9.sh
+```
+
+Run only where `GITHUB_TOKEN` is already injected by protected CI or a secret manager. Protected CI maps environment secret `G9_READ_TOKEN` to it; this token needs read access to locked private repositories and package artifacts. Runner requires `PyYAML==6.0.3`. Do not put credentials in command history, Git configuration, Docker build args, Compose files, logs, evidence, or Git.
+
+`run-g9.sh` removes temporary source, credentials, certificates, rendered configuration, containers, volumes, and fixture values on exit. It must work from clean `gym-infra` checkout with no sibling repositories present.
+
+Final lock must include detached repository SHAs, v6.0.1 Java/Go artifact versions and checksums, canonical merged OpenAPI checksum, fake-payment contract identity, generated-gateway source identity/image digest, Kong image digest, route/template checksums, and redacted rendered-config checksum. Gateway runs as digest-pinned image after its source and image have been published; G9 must not rebuild mutable gateway source.
+
+## G9 completion checks
+
+- 27 exact public operations: Identity 12, Member 7, Plans 8;
+- route and wrong-method negatives, JWT/trusted-header/CORS checks;
+- Kong-to-gateway and gateway-to-service mTLS/SAN checks;
+- no Kong direct Member/Plans `50051` access;
+- workload-only RPC isolation;
+- Plans `8080 /api/**` returns `404`; Actuator stays healthy;
+- safe deterministic `500`/`503` envelope;
+- Helm and port-specific NetworkPolicy checks;
+- TypeScript generation from released canonical OpenAPI and `tsc --noEmit`;
+- schema-controlled sanitized evidence only.
+
+Raw logs remain private CI diagnostics. Never commit keys, JWTs, tokens, Authorization values, PII, fixture IDs, raw Protobuf payloads, or raw stack/transport details.
+
+## Historical G5 fixture
 
 ```bash
 docker compose -f docker-compose.yml up -d --build
@@ -10,42 +52,10 @@ cd tests && go test -v ./...
 docker compose -f docker-compose.yml down
 ```
 
-Proxy: `http://localhost:8000`  
+Proxy: `http://localhost:8000`
+
 Admin: `http://localhost:8001`
 
-## Contents
+`g5-compose.yml` and `run-g5.sh` use disposable Kong, Identifier, Member, PostgreSQL, Redis, Kafka, Schema Registry, and Member mTLS wiring. `schema-seed` registers frozen event schemas before applications start. `generate-g5-certs.sh` creates ignored short-lived certificates removed on teardown.
 
-| Path | Purpose |
-|---|---|
-| `kong.yml` | Declarative DB-less config (routes + plugin) |
-| `plugins/gym-jwt-claims/` | RS256 validate, strip/inject trusted headers |
-| `certs/` | Fixture RSA current/previous key pairs (test-only) |
-| `mock-upstream/` | Go mock that records method/path/headers |
-| `tests/gateway_test.go` | Gateway-local contract suite (Go) |
-| `fixtures/kong-upstream-capture.json` | Sanitized upstream capture |
-
-## Contract sources
-
-- `gym-proto/contracts/v1/jwt-profile.json`
-- `gym-proto/contracts/v1/auth/trusted-headers.json`
-- `gym-proto/proto/http.yaml`
-
-## Scope
-
-This is fast Part A policy fixture. `mock-upstream` aliases `ms-gym-identifier` and `ms-gym-member` only so Kong uses production-shaped service DNS.
-
-Member currently has no HTTP gateway/transcoder, so Kong exposes no Member external routes. Internal workload RPCs remain direct-mTLS only and have no Kong route. Add Member routes only with a real service-local HTTP gateway/transcoder.
-
-Kong strips public `x-user-id`, `x-user-role`, legacy `x-gym-id`, legacy `x-membership-status`, and `x-trace-id`. It injects only verified identity and role, and preserves W3C `traceparent` and `tracestate`.
-
-## G5 transport topology
-
-`g5-compose.yml` and `run-g5.sh` provide disposable Kong, Identifier, Member, PostgreSQL, Redis, Kafka, Schema Registry, and Member server mTLS wiring. `schema-seed` registers frozen event schemas in the empty disposable Schema Registry before either application starts. `generate-g5-certs.sh` creates a one-day CA plus Member server certificate; `g5-certs/` is removed on teardown and ignored by Git.
-
-```bash
-./run-g5.sh
-```
-
-After readiness, `run-g5.sh` runs `g5-business-check.sh`: Identifier registration and Kafka projection, email verification, identity-only login/refresh claims, retired gym-selection route rejection, logout blacklist, multi-gym suspension, and outbox recovery. It reads the raw verification token through Confluent's official Protobuf consumer into a private file removed on exit; it never prints the token or URL. Gym, plan, and subscription rows are direct disposable Member DB fixtures because this topology has no Gym-management or Payment API.
-
-Builds require `GITHUB_ACTOR` and `GITHUB_TOKEN`; the runner fails before Docker starts without them. Passing Identifier-led checks close G5 for identity and event paths without an Identifier-to-Member runtime edge. Member public HTTP remains a separate post-G5 surface.
+G5 is historical: it does not define G9 public Member/Plans routes, source materialization, or final release proof.

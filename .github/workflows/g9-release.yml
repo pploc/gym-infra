@@ -1,0 +1,46 @@
+name: G9 Locked Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - kong/g9-release-lock.json
+      - kong/materialize-g9.py
+      - kong/materialize-g9_test.py
+      - kong/validate-g9-lock.py
+      - kong/validate-g9-lock_test.py
+      - kong/run-g9.sh
+      - kong/g9-compose.yml
+      - kong/generated-gateway/**
+      - kong/sanitize-g9-evidence.py
+      - kong/sanitize-g9-evidence_test.py
+      - kong/render-g9-config.py
+      - kong/g9-kong-template.yml
+      - kong/g9-business-check.sh
+      - kong/g9-compatibility-check.sh
+      - kong/verify-openapi-types.sh
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  g9:
+    name: Locked G9 fixture
+    runs-on: ubuntu-24.04
+    environment: g9-release
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run locked G9 fixture
+        env:
+          GITHUB_TOKEN: ${{ secrets.G9_READ_TOKEN }}
+        run: ./kong/run-g9.sh
+      - name: Upload sanitized G9 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g9-sanitized-${{ github.sha }}
+          path: kong/g9-sanitized-evidence.yaml
+          if-no-files-found: ignore
+          retention-days: 30

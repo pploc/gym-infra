@@ -106,7 +106,7 @@ services:
     environment:
       GRADLE_USER_HOME: /tmp/gradle
     volumes:
-      - ../../gym-proto:/source:ro
+      - ${G9_PROTO_ROOT:?G9_PROTO_ROOT is required}:/source:ro
     command: >-
       sh -ec 'cp -R /source/. /tmp/gym-proto &&
       ./gradlew seedConfluentSchemas -PschemaRegistryUrl=http://schema-registry:8081 --no-daemon'
@@ -119,7 +119,7 @@ services:
     environment:
       PGPASSWORD: postgres
     volumes:
-      - ../../ms-gym-identifier/migrations:/migrations:ro
+      - ${G9_IDENTIFIER_ROOT:?G9_IDENTIFIER_ROOT is required}/migrations:/migrations:ro
     command: >-
       sh -ec 'psql -h identity-postgres -U postgres -d identity_db -f /migrations/001_init.sql &&
       psql -h identity-postgres -U postgres -d identity_db -f /migrations/002_email_verification_tokens.sql'
@@ -154,7 +154,7 @@ services:
 
   ms-gym-plans:
     build:
-      context: ../../ms-gym-plans
+      context: ${G9_PLANS_ROOT:?G9_PLANS_ROOT is required}
       secrets:
         - source: github_token
           target: github_token
@@ -180,7 +180,7 @@ services:
 
   ms-gym-member:
     build:
-      context: ../../ms-gym-member
+      context: ${G9_MEMBER_ROOT:?G9_MEMBER_ROOT is required}
       secrets:
         - source: github_token
           target: github_token
@@ -228,7 +228,7 @@ services:
 
   ms-gym-identifier:
     build:
-      context: ../../ms-gym-identifier
+      context: ${G9_IDENTIFIER_ROOT:?G9_IDENTIFIER_ROOT is required}
       secrets:
         - source: github_token
           target: github_token
@@ -266,6 +266,10 @@ services:
   ms-gym-api-gateway:
     build:
       context: ./generated-gateway
+      secrets:
+        - source: github_token
+          target: github_token
+          mode: 0400
     depends_on:
       ms-gym-plans:
         condition: service_healthy

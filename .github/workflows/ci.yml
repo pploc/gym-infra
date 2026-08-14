@@ -88,10 +88,12 @@ jobs:
       - name: Check Stage 3 scripts and Compose
         run: |
           set -euo pipefail
-          sh -n kong/run-g9.sh kong/g9-business-check.sh kong/g9-compatibility-check.sh
-          python3 -m py_compile kong/render-g9-config.py
+          sh -n kong/run-g9.sh kong/g9-business-check.sh kong/g9-compatibility-check.sh kong/verify-openapi-types.sh
+          python3 -m py_compile kong/render-g9-config.py kong/materialize-g9.py kong/validate-g9-lock.py kong/sanitize-g9-evidence.py
+          python3 kong/validate-g9-lock.py kong/g9-release-lock.json
+          python3 -m unittest kong/materialize-g9_test.py kong/validate-g9-lock_test.py kong/sanitize-g9-evidence_test.py
           docker compose -f kong/docker-compose.yml config --quiet
-          docker compose -f kong/g9-compose.yml config --quiet
+          G9_PROTO_ROOT=/tmp/g9-proto G9_IDENTIFIER_ROOT=/tmp/g9-identifier G9_MEMBER_ROOT=/tmp/g9-member G9_PLANS_ROOT=/tmp/g9-plans docker compose -f kong/g9-compose.yml config --quiet
           (cd kong/tests && go test -run '^$' ./...)
 
   docker-go-sample:

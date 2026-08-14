@@ -1,8 +1,27 @@
 {
+  "lockVersion": 2,
   "gymProto": {
     "version": "v6.0.0",
     "sourceSha": "80e41f2ffe074df13866458d04b63d2263d00c3c",
     "releaseUrl": "https://github.com/pploc/gym-proto/releases/tag/v6.0.0"
+  },
+  "repositories": {
+    "gymProto": {
+      "url": "https://github.com/pploc/gym-proto.git",
+      "sha": "80e41f2ffe074df13866458d04b63d2263d00c3c"
+    },
+    "identifier": {
+      "url": "https://github.com/pploc/ms-gym-identifier.git",
+      "sha": "ab254829ec340406bc5336eebf786670c6667ce3"
+    },
+    "member": {
+      "url": "https://github.com/pploc/ms-gym-member.git",
+      "sha": "f530ceffbcbe1f94af01afc3f3709d2c01a128a5"
+    },
+    "plans": {
+      "url": "https://github.com/pploc/ms-gym-plans.git",
+      "sha": "5822664483bc6201b1af9710d77085e6d66a7a46"
+    }
   },
   "artifacts": {
     "kongProto": {

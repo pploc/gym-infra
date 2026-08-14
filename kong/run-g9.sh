@@ -2,17 +2,19 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-proto_root=$(CDPATH= cd -- "$root/../../gym-proto" && pwd)
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/gym-g9.XXXXXX")
+proto_root=
 g9_compose="docker compose -f $root/g9-compose.yml"
 plugin_compose="docker compose -f $root/docker-compose.yml"
 observed=$root/g9-observed-errors.yaml
+sanitized=$root/g9-sanitized-evidence.yaml
 lock=$root/g9-release-lock.json
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required to build private dependencies}"
 
 cleanup() {
   $g9_compose down --remove-orphans >/dev/null 2>&1 || true
   $plugin_compose down --remove-orphans >/dev/null 2>&1 || true
-  rm -rf "$root/g9-certs" "$root/g9-proto" "$root/g9-release-assets" "$root/g9-rendered-kong.yml" \
+  rm -rf "$workspace" "$root/g9-certs" "$root/g9-proto" "$root/g9-release-assets" "$root/g9-rendered-kong.yml" \
     "$root/g9-private" "$root/g9-business-status"
 }
 failed() {
@@ -29,6 +31,10 @@ failed() {
 }
 trap cleanup EXIT INT TERM
 
+python3 -c 'import yaml' || {
+  printf '%s\n' 'PyYAML is required; install PyYAML==6.0.3 before running G9.' >&2
+  exit 1
+}
 helm lint "$root/../helm/gym-service"
 "$root/../helm/gym-service/tests/networkpolicy_test.sh"
 
@@ -47,16 +53,23 @@ curl -fsS http://localhost:8001/status >/dev/null 2>&1 || {
 }
 $plugin_compose down --remove-orphans || failed
 
-rm -f "$observed"
-python3 - "$lock" "$proto_root" "$root" <<'PY'
+rm -f "$observed" "$sanitized"
+python3 "$root/validate-g9-lock.py" "$lock"
+python3 "$root/materialize-g9.py" --lock "$lock" --workspace "$workspace" > "$workspace/paths.env"
+# materialize-g9.py emits shell-quoted paths only.
+# shellcheck disable=SC1090
+. "$workspace/paths.env"
+proto_root=$G9_PROTO_ROOT
+python3 - "$lock" "$proto_root" "$root" "$G9_IDENTIFIER_ROOT" "$G9_MEMBER_ROOT" "$G9_PLANS_ROOT" <<'PY'
 import hashlib
 import json
 import subprocess
 import sys
 import urllib.request
+from urllib.parse import urlparse
 from pathlib import Path
 
-lock_path, proto_root, root = map(Path, sys.argv[1:])
+lock_path, proto_root, root, identifier_root, member_root, plans_root = map(Path, sys.argv[1:])
 lock = json.loads(lock_path.read_text())
 
 def sha256(path):
@@ -75,26 +88,40 @@ require(sha256(root / "g9-kong-template.yml") == lock["routes"]["templateSha256"
 require((root / "g9-compose.yml").read_text().count(lock["kong"]["image"]) == 1, "Kong image is not pinned to g9 release lock")
 require(lock["dependencies"]["javaProto"] in (proto_root / "contracts/v1/manifest.json").read_text(), "Java contract version mismatch")
 
-for service in ("ms-gym-member", "ms-gym-plans"):
-    build = (proto_root.parent / service / "build.gradle").read_text()
-    require(f"com.gym.proto:gym-proto-java:{lock['dependencies']['javaProto']}" in build, f"{service} does not use released Java contract")
+for name, service_root in (("ms-gym-member", member_root), ("ms-gym-plans", plans_root)):
+    build = (service_root / "build.gradle").read_text()
+    require(f"com.gym.proto:gym-proto-java:{lock['dependencies']['javaProto']}" in build, f"{name} does not use released Java contract")
 
-for module in (proto_root.parent / "ms-gym-identifier", root / "generated-gateway"):
+for module in (identifier_root, root / "generated-gateway", root / "fixtures/fake-payment"):
     listing = subprocess.check_output(["go", "list", "-m", "github.com/pploc/proto-go"], cwd=module, text=True).strip()
     require(listing.endswith(lock["dependencies"]["goProto"]), f"{module} does not use released Go contract")
+    require("replace github.com/pploc/proto-go" not in (module / "go.mod").read_text(), f"{module} has local Go contract replacement")
 
-assets = {"kong-proto-6.0.0.tar.gz": lock["artifacts"]["kongProto"]["sha256"]}
-assets.update({f"{name}.openapi.yaml": digest for name, digest in lock["artifacts"]["openApi"].items()})
+kong_proto = lock["artifacts"]["kongProto"]
+assets = {Path(urlparse(kong_proto["url"]).path).name: (kong_proto["url"], kong_proto["sha256"])}
+assets.update({
+    f"{name}.openapi.yaml": (
+        f"https://github.com/pploc/gym-proto/releases/download/{lock['gymProto']['version']}/{name}.openapi.yaml",
+        digest,
+    )
+    for name, digest in lock["artifacts"]["openApi"].items()
+})
+canonical_openapi = lock["artifacts"].get("canonicalOpenApi")
+if canonical_openapi:
+    assets["gym-active-api.openapi.yaml"] = (canonical_openapi["url"], canonical_openapi["sha256"])
 asset_dir = root / "g9-release-assets"
 asset_dir.mkdir(exist_ok=True)
-for name, expected in assets.items():
+for name, (url, expected) in assets.items():
     path = asset_dir / name
-    urllib.request.urlretrieve(f"https://github.com/pploc/gym-proto/releases/download/{lock['gymProto']['version']}/{name}", path)
+    urllib.request.urlretrieve(url, path)
     require(sha256(path) == expected, f"release asset checksum mismatch: {name}")
 PY
+set -- "$root"/g9-release-assets/kong-proto-*.tar.gz
+[ "$#" -eq 1 ] || { printf '%s\n' 'Expected exactly one locked Kong proto archive.' >&2; failed; }
+"$root/verify-openapi-types.sh" "$root/g9-release-assets/gym-active-api.openapi.yaml" || failed
 rm -rf "$root/g9-proto"
 mkdir -p "$root/g9-proto"
-tar -xzf "$root/g9-release-assets/kong-proto-6.0.0.tar.gz" -C "$root/g9-proto" --strip-components=1
+tar -xzf "$1" -C "$root/g9-proto" --strip-components=1
 "$root/generate-g9-certs.sh" "$root/g9-certs"
 "$root/render-g9-config.py" \
   --manifest "$proto_root/contracts/v1/http/active-operations.yaml" \
@@ -111,7 +138,8 @@ for _ in $(seq 1 300); do
       cp "$observed" "$root/g9-last-run.log"
       exit 1
     }
-    printf '%s\n' 'G9 Helm, NetworkPolicy, Kong plugin, and compatibility gates passed.'
+    python3 "$root/sanitize-g9-evidence.py" "$observed" "$sanitized" || failed
+    printf '%s\n' 'G9 Helm, NetworkPolicy, Kong plugin, compatibility, and sanitized-evidence gates passed.'
     exit 0
   fi
   sleep 1

@@ -2,6 +2,10 @@ name: Go CI
 
 on:
   workflow_call:
+    secrets:
+      github_token:
+        description: Token with read access to private Go modules.
+        required: false
     inputs:
       service_path:
         description: Path to Go module root
@@ -45,6 +49,21 @@ jobs:
           go-version: ${{ inputs.go_version }}
           cache-dependency-path: ${{ inputs.service_path }}/go.sum
 
+      - name: Configure private Go modules
+        if: secrets.github_token != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.github_token }}
+        run: |
+          set -euo pipefail
+          export GOPRIVATE=github.com/pploc/*
+          export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/gym-private-modules.gitconfig"
+          umask 077
+          cat > "$GIT_CONFIG_GLOBAL" <<EOF
+          [url "https://x-access-token:${GITHUB_TOKEN}@github.com/"]
+              insteadOf = https://github.com/
+          EOF
+          printf 'GOPRIVATE=%s\nGIT_CONFIG_GLOBAL=%s\n' "$GOPRIVATE" "$GIT_CONFIG_GLOBAL" >> "$GITHUB_ENV"
+
       - name: Go Vet
         run: go vet ./...
 
@@ -69,3 +88,7 @@ jobs:
           echo "Go total coverage: ${COVERAGE}% (min ${{ inputs.coverage_min }}%)"
           awk -v c="$COVERAGE" -v m="${{ inputs.coverage_min }}" 'BEGIN { exit (c+0 < m+0) ? 1 : 0 }' \
             || { echo "ERROR: coverage ${COVERAGE}% below ${{ inputs.coverage_min }}%"; exit 1; }
+
+      - name: Remove private Go module credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/gym-private-modules.gitconfig"
