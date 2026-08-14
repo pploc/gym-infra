@@ -18,14 +18,17 @@ import (
 	memberv1 "github.com/pploc/proto-go/member/v1"
 	plansv1 "github.com/pploc/proto-go/plans/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 const (
-	headerUserID   = "x-user-id"
-	headerUserRole = "x-user-role"
-	headerError    = "x-error-code"
+	headerUserID    = "x-user-id"
+	headerUserRole  = "x-user-role"
+	headerError     = "x-error-code"
+	upstreamTimeout = 5 * time.Second
 )
 
 var kongSANs = map[string]struct{}{
@@ -35,16 +38,16 @@ var kongSANs = map[string]struct{}{
 }
 
 type config struct {
-	httpsAddr      string
-	serverCert     string
-	serverKey      string
-	clientCA       string
-	gatewayCert    string
-	gatewayKey     string
-	memberAddr     string
-	memberCA       string
-	plansAddr      string
-	plansCA        string
+	httpsAddr   string
+	serverCert  string
+	serverKey   string
+	clientCA    string
+	gatewayCert string
+	gatewayKey  string
+	memberAddr  string
+	memberCA    string
+	plansAddr   string
+	plansCA     string
 }
 
 func main() {
@@ -67,11 +70,11 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              cfg.httpsAddr,
-		Handler:           handler,
+		Handler:           http.TimeoutHandler(handler, 5*time.Second, "Upstream service unavailable\n"),
 		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      upstreamTimeout,
 		IdleTimeout:       60 * time.Second,
 	}
 	go func() {
@@ -252,6 +255,9 @@ func promoteErrorCode(ctx context.Context, mux *runtime.ServeMux, marshaler runt
 		if values := serverMetadata.TrailerMD.Get(headerError); len(values) == 1 && validHeaderValue(values[0]) {
 			writer.Header().Set(headerError, values[0])
 		}
+	}
+	if status.Code(err) == codes.DeadlineExceeded || status.Code(err) == codes.Unavailable {
+		err = status.Error(codes.Unavailable, "Upstream service unavailable")
 	}
 	runtime.DefaultHTTPErrorHandler(ctx, mux, marshaler, writer, request, err)
 }

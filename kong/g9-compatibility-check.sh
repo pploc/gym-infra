@@ -2,13 +2,25 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+compose="docker compose -f $root/g9-compose.yml"
 out=${1:-"$root/g9-observed-errors.yaml"}
 status_file=${2:-${G9_BUSINESS_STATUS_FILE:-"$root/g9-business-status"}}
 base=${G9_BASE_URL:-https://localhost:8443}
 origin=${G9_ORIGIN:-https://localhost:3000}
 ca=${G9_CA_CERT:-"$root/g9-certs/g9-ca.crt"}
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
+plans_stopped=false
+plans_database_read_only=false
+cleanup() {
+  if [ "$plans_database_read_only" = true ]; then
+    $compose exec -T plans-postgres psql -U postgres -d postgres -c 'ALTER DATABASE plans_db RESET default_transaction_read_only' >/dev/null 2>&1 || true
+  fi
+  if [ "$plans_stopped" = true ]; then
+    $compose start ms-gym-plans >/dev/null 2>&1 || true
+  fi
+  rm -rf "$work"
+}
+trap cleanup EXIT
 
 b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 make_token() {
@@ -110,9 +122,14 @@ observe() {
   content_type_value=$(printf '%s' "$content_type" | yaml_string)
   exposed_value=$(printf '%s' "$exposed" | yaml_string)
   allow_origin_value=$(printf '%s' "$allow_origin" | yaml_string)
+  path_value=$(printf '%s' "$path" | yaml_string)
   [ -n "$grpc_status" ] && grpc_status_location=response-headers-or-curl-merged-trailers || grpc_status_location=absent
   [ -n "$grpc_message" ] && grpc_message_location=response-headers-or-curl-merged-trailers || grpc_message_location=absent
   [ -n "$error_code" ] && error_code_location=response-headers-or-curl-merged-trailers || error_code_location=absent
+  internal_exception_text=false
+  if grep -aEqi 'exception|stack[[:space:]_-]*trace|java\.|org\.springframework|caused by:' "$response"; then
+    internal_exception_text=true
+  fi
   cors_x_error=false
   if [ -n "$error_code" ] && [ "$allow_origin" = "$origin" ] && lower_contains_header "$exposed" x-error-code; then
     cors_x_error=true
@@ -124,7 +141,7 @@ observe() {
 
   cat >>"$out" <<EOF
   - case: $name
-    request: {method: $method, path: $path}
+    request: {method: $method, path: $path_value}
     expected_http_status: $expected
     http_status: $actual
     content_type: $content_type_value
@@ -141,6 +158,7 @@ observe() {
       expose_headers: $exposed_value
       status_and_body_browser_readable: $cors_status_body
       x_error_code_browser_readable: $cors_x_error
+    contains_internal_exception_text: $internal_exception_text
 EOF
 
   if [ "$actual" != "$expected" ]; then
@@ -176,9 +194,6 @@ load_setup() {
   [ -r "$status_file" ] || fail "setup-input-missing-$status_file"
   # Explicit shell assignments produced by the business fixture. No values are guessed here.
   # Required: G9_CUSTOMER_TOKEN, G9_FOREIGN_MEMBER_ID, G9_GYM_ID, G9_CONFLICT_EMAIL.
-  # Optional deterministic dependency cases: G9_500_METHOD/PATH/BODY/TOKEN and
-  # G9_503_METHOD/PATH/BODY/TOKEN. Provide all fields for a case or none.
-  # Missing cases remain explicit skipped observations and never become release evidence.
   set -a
   # shellcheck disable=SC1090
   . "$status_file"
@@ -189,16 +204,6 @@ load_setup() {
   : "${G9_CONFLICT_EMAIL:?G9_CONFLICT_EMAIL missing from $status_file}"
 }
 
-optional_case() {
-  optional_code=$1 method_name=G9_${optional_code}_METHOD path_name=G9_${optional_code}_PATH body_name=G9_${optional_code}_BODY token_name=G9_${optional_code}_TOKEN
-  eval "method=\${$method_name-}; path=\${$path_name-}; body=\${$body_name-}; token=\${$token_name-}"
-  if [ -z "$method$path$body$token" ]; then
-    printf '    - http_status: %s\n      reason: deterministic-business-fixture-input-not-provided\n' "$optional_code" >>"$out"
-    return
-  fi
-  [ -n "$method" ] && [ -n "$path" ] || fail "${optional_code}-setup-input-incomplete"
-  observe "service_$optional_code" "$optional_code" true "$method" "$path" "$token" "$body"
-}
 
 cat >"$out" <<'EOF'
 # Sanitized byte-exact observations from the real Kong 3.8 fixture.
@@ -226,11 +231,39 @@ observe member_forbidden 403 true GET "/api/v1/members/$G9_FOREIGN_MEMBER_ID" "$
 observe plans_not_found 404 true GET /api/v1/plans/g9-compat-missing-plan "$G9_CUSTOMER_TOKEN" ''
 observe identifier_conflict 409 false POST /api/v1/auth/register '' "{\"email\":\"$G9_CONFLICT_EMAIL\",\"password\":\"G9RunnerPass1\",\"full_name\":\"G9 Compatibility\"}"
 
-cat >>"$out" <<'EOF'
-  skipped:
-EOF
-optional_case 500
-optional_case 503
+$compose exec -T plans-postgres psql -U postgres -d plans_db -c 'ALTER DATABASE plans_db SET default_transaction_read_only = on' >/dev/null
+plans_database_read_only=true
+$compose restart ms-gym-plans >/dev/null
+for _ in $(seq 1 30); do
+  if $compose exec -T ms-gym-plans bash -c "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+observe service_500 500 true POST /api/v1/gyms "$super_admin_token" '{"chainId":"g9-fault","name":"g9-fault","address":"g9-fault","city":"g9-fault"}'
+$compose exec -T plans-postgres psql -U postgres -d postgres -c 'ALTER DATABASE plans_db RESET default_transaction_read_only' >/dev/null
+plans_database_read_only=false
+$compose restart ms-gym-plans >/dev/null
+
+$compose stop ms-gym-plans >/dev/null
+plans_stopped=true
+observe service_503 503 false GET /api/v1/plans/g9-compat-missing-plan "$G9_CUSTOMER_TOKEN"
+$compose start ms-gym-plans >/dev/null
+plans_stopped=false
+
+python3 - "$out" <<'PY'
+import sys
+import yaml
+
+cases = {item["case"]: item for item in yaml.safe_load(open(sys.argv[1]))["measurement"]["cases"]}
+for name, status, body in (
+    ("service_500", 500, '{"code":13, "message":"Internal server error", "details":[]}'),
+    ("service_503", 503, '{"code":14, "message":"Upstream service unavailable", "details":[]}'),
+):
+    case = cases[name]
+    if case["http_status"] != status or case["body"]["value"] != body:
+        raise SystemExit(f"{name} response is not browser-safe")
+PY
 
 if grep -aEqi 'exception|stack[[:space:]_-]*trace|java\.|org\.springframework|caused by:' "$work"/*.body; then
   fail internal-exception-text-observed
@@ -238,6 +271,6 @@ fi
 cat >>"$out" <<'EOF'
 gate:
   result: passed
-release_ready: true
+release_ready: false
 EOF
 printf '%s\n' 'G9 Kong 3.8 compatibility measurement passed.'

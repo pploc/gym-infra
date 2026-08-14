@@ -97,6 +97,28 @@ func TestGivenUpstreamErrorCodeTrailer_WhenHandlingError_ThenPromotesHeaderAndKe
 	}
 }
 
+func TestGivenUnavailableUpstream_WhenHandlingError_ThenReturnsSanitized503(t *testing.T) {
+	for _, upstreamError := range []error{
+		status.Error(codes.DeadlineExceeded, "timeout"),
+		status.Error(codes.Unavailable, "dial tcp: lookup ms-gym-plans"),
+	} {
+		// given
+		request := httptest.NewRequest("GET", "/api/v1/plans/missing", nil)
+		writer := httptest.NewRecorder()
+
+		// when
+		promoteErrorCode(context.Background(), runtime.NewServeMux(), &runtime.JSONPb{}, writer, request, upstreamError)
+
+		// then
+		if got := writer.Code; got != 503 {
+			t.Fatalf("status = %d", got)
+		}
+		if !bytes.Contains(writer.Body.Bytes(), []byte(`"message":"Upstream service unavailable"`)) {
+			t.Fatalf("body = %s", writer.Body.String())
+		}
+	}
+}
+
 func TestGivenErrorCode_WhenCheckingHeaderSafety_ThenOnlySingleLineValuePasses(t *testing.T) {
 	// given / when / then
 	if !validHeaderValue("MEMBER_NOT_FOUND") {
