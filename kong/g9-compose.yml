@@ -106,7 +106,7 @@ services:
     environment:
       GRADLE_USER_HOME: /tmp/gradle
     volumes:
-      - ${G9_PROTO_ROOT:?G9_PROTO_ROOT is required}:/source:ro
+      - ${G9_PROTO_ROOT:?G9_PROTO_ROOT is required}:/source
     command: >-
       sh -ec './gradlew seedConfluentSchemas -PschemaRegistryUrl=http://schema-registry:8081 --no-daemon'
 
