@@ -4,6 +4,7 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 workspace=$(mktemp -d "${TMPDIR:-/tmp}/gym-g9.XXXXXX")
 rmdir "$workspace"
+paths=$(mktemp "${TMPDIR:-/tmp}/gym-g9-paths.XXXXXX")
 proto_root=
 g9_compose="docker compose -f $root/g9-compose.yml"
 plugin_compose="docker compose -f $root/docker-compose.yml"
@@ -15,6 +16,7 @@ lock=$root/g9-release-lock.json
 cleanup() {
   $g9_compose down --remove-orphans >/dev/null 2>&1 || true
   $plugin_compose down --remove-orphans >/dev/null 2>&1 || true
+  rm -f "$paths"
   rm -rf "$workspace" "$root/g9-certs" "$root/g9-proto" "$root/g9-release-assets" "$root/g9-rendered-kong.yml" \
     "$root/g9-private" "$root/g9-business-status"
 }
@@ -56,10 +58,10 @@ $plugin_compose down --remove-orphans || failed
 
 rm -f "$observed" "$sanitized"
 python3 "$root/validate-g9-lock.py" "$lock"
-python3 "$root/materialize-g9.py" --lock "$lock" --workspace "$workspace" > "$workspace/paths.env"
+python3 "$root/materialize-g9.py" --lock "$lock" --workspace "$workspace" > "$paths"
 # materialize-g9.py emits shell-quoted paths only.
 # shellcheck disable=SC1090
-. "$workspace/paths.env"
+. "$paths"
 proto_root=$G9_PROTO_ROOT
 python3 - "$lock" "$proto_root" "$root" "$G9_IDENTIFIER_ROOT" "$G9_MEMBER_ROOT" "$G9_PLANS_ROOT" <<'PY'
 import hashlib
