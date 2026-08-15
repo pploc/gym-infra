@@ -12,6 +12,7 @@ on:
       - kong/validate-g9-lock_test.py
       - kong/run-g9.sh
       - kong/g9-compose.yml
+      - kong/g9-java.buf.gen.yaml
       - kong/generated-gateway/**
       - kong/sanitize-g9-evidence.py
       - kong/sanitize-g9-evidence_test.py

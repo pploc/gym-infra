@@ -95,6 +95,23 @@ services:
       timeout: 5s
       retries: 30
 
+  schema-java-generate:
+    image: bufbuild/buf:1.61.0@sha256:3b7fb27f8ff153037b3f781924c6aa1327352f14ee547cf45fd75f6d994fe0eb
+    environment:
+      HOME: /tmp
+    volumes:
+      - ${G9_PROTO_ROOT:?G9_PROTO_ROOT is required}:/source:ro
+      - g9-proto-build:/work
+      - ./g9-java.buf.gen.yaml:/template/buf.gen.yaml:ro
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        find /work -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+        cp -a /source/. /work/
+        sed -i 's/\r$//' /work/gradlew
+        cd /work
+        exec buf generate --template /template/buf.gen.yaml
+
   schema-seed:
     image: eclipse-temurin:26-jdk
     depends_on:
@@ -102,11 +119,13 @@ services:
         condition: service_completed_successfully
       schema-registry:
         condition: service_healthy
-    working_dir: /tmp
+      schema-java-generate:
+        condition: service_completed_successfully
+    working_dir: /work
     environment:
       GRADLE_USER_HOME: /tmp/gradle
     volumes:
-      - ${G9_PROTO_ROOT:?G9_PROTO_ROOT is required}:/source:ro
+      - g9-proto-build:/source:ro
     command: >-
       sh -ec 'work=$$(mktemp -d) && cp -a /source/. "$$work/" && cd "$$work" &&
       exec ./gradlew seedConfluentSchemas -PschemaRegistryUrl=http://schema-registry:8081 --no-daemon'
@@ -327,6 +346,9 @@ services:
       interval: 2s
       timeout: 2s
       retries: 20
+
+volumes:
+  g9-proto-build:
 
 secrets:
   github_token:

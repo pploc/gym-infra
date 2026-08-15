@@ -89,6 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           sh -n kong/run-g9.sh kong/g9-business-check.sh kong/g9-compatibility-check.sh kong/verify-openapi-types.sh
+          test "$(sha256sum kong/g9-java.buf.gen.yaml | cut -d " " -f1)" = c96b65231ccc762d3d5ee25ea33cb0301c92ea13252554c1107e3181fcd4d5b6
           python3 -m py_compile kong/render-g9-config.py kong/materialize-g9.py kong/validate-g9-lock.py kong/sanitize-g9-evidence.py
           python3 kong/validate-g9-lock.py kong/g9-release-lock.json
           python3 -m unittest kong/materialize-g9_test.py kong/validate-g9-lock_test.py kong/sanitize-g9-evidence_test.py
