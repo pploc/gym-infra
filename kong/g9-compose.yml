@@ -102,13 +102,14 @@ services:
         condition: service_completed_successfully
       schema-registry:
         condition: service_healthy
-    working_dir: /source
+    working_dir: /tmp
     environment:
       GRADLE_USER_HOME: /tmp/gradle
     volumes:
-      - ${G9_PROTO_ROOT:?G9_PROTO_ROOT is required}:/source
+      - ${G9_PROTO_ROOT:?G9_PROTO_ROOT is required}:/source:ro
     command: >-
-      sh -ec './gradlew seedConfluentSchemas -PschemaRegistryUrl=http://schema-registry:8081 --no-daemon'
+      sh -ec 'work=$$(mktemp -d) && cp -a /source/. "$$work/" && cd "$$work" &&
+      exec ./gradlew seedConfluentSchemas -PschemaRegistryUrl=http://schema-registry:8081 --no-daemon'
 
   identifier-migrate:
     image: postgres:16-alpine
