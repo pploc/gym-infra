@@ -2,10 +2,6 @@ name: Docker Build & Push
 
 on:
   workflow_call:
-    secrets:
-      github_token:
-        description: Token with read access to private build dependencies.
-        required: true
     inputs:
       service_name:
         description: Logical service name (used in image path)
@@ -101,7 +97,7 @@ jobs:
         with:
           registry: ${{ inputs.registry }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -110,7 +106,7 @@ jobs:
           file: ${{ steps.meta.outputs.dockerfile }}
           push: ${{ inputs.push }}
           secrets: |
-            github_token=${{ secrets.github_token }}
+            github_token=${{ github.token }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

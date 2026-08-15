@@ -2,10 +2,6 @@ name: Go CI
 
 on:
   workflow_call:
-    secrets:
-      github_token:
-        description: Token with read access to private Go modules.
-        required: false
     inputs:
       service_path:
         description: Path to Go module root
@@ -51,7 +47,7 @@ jobs:
 
       - name: Configure private Go modules
         env:
-          GITHUB_TOKEN: ${{ secrets.github_token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           [ -n "$GITHUB_TOKEN" ] || exit 0
