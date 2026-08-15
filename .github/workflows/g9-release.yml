@@ -44,3 +44,11 @@ jobs:
           path: kong/g9-sanitized-evidence.yaml
           if-no-files-found: ignore
           retention-days: 30
+      - name: Upload private G9 failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g9-failure-${{ github.sha }}
+          path: kong/g9-last-run.log
+          if-no-files-found: ignore
+          retention-days: 3
