@@ -32,6 +32,11 @@ on:
         required: false
         type: boolean
         default: true
+      source_sha_only:
+        description: Publish only immutable source SHA tag
+        required: false
+        type: boolean
+        default: false
       max_tags:
         description: Keep at most this many package versions (prune oldest)
         required: false
@@ -68,9 +73,12 @@ jobs:
           REF_TAG=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]' | sed 's|/|-|g' | sed 's/[^a-z0-9._-]/-/g')
           SHA_TAG="${GITHUB_SHA}"
 
-          TAGS="${IMAGE}:${SHA_TAG},${IMAGE}:${REF_TAG}"
-          if [[ "$REF_NAME" == "develop" || "$REF_NAME" == "main" ]]; then
-            TAGS="${TAGS},${IMAGE}:latest"
+          TAGS="${IMAGE}:${SHA_TAG}"
+          if [[ "${{ inputs.source_sha_only }}" != "true" ]]; then
+            TAGS="${TAGS},${IMAGE}:${REF_TAG}"
+            if [[ "$REF_NAME" == "develop" || "$REF_NAME" == "main" ]]; then
+              TAGS="${TAGS},${IMAGE}:latest"
+            fi
           fi
 
           DOCKERFILE="${{ inputs.dockerfile }}"
@@ -100,6 +108,7 @@ jobs:
           password: ${{ github.token }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ${{ inputs.context }}
@@ -110,6 +119,10 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Record image digest
+        if: inputs.push
+        run: echo "${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Prune old package versions (keep max ${{ inputs.max_tags }})
         if: inputs.push
