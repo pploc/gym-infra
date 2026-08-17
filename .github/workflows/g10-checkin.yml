@@ -1,0 +1,48 @@
+name: G10 Check-in Fixture
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - kong/g10-release-lock.json
+      - kong/validate-g10-lock.py
+      - kong/validate-g10-lock_test.py
+      - kong/render-g10-config.py
+      - kong/render-g10-config_test.py
+      - kong/g10-kong-template.yml
+      - kong/g10-compose.yml
+      - kong/generate-g10-certs.sh
+      - kong/g10-business-check.sh
+      - kong/run-g10.sh
+      - kong/generated-gateway/**
+      - helm/gym-service/**
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  g10:
+    name: G10 draft fixture gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate G10 draft fixture boundary
+        run: ./kong/run-g10.sh
+      - name: Upload sanitized G10 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g10-sanitized-${{ github.sha }}
+          path: kong/g10-sanitized-evidence.yaml
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Upload private G10 failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g10-failure-${{ github.sha }}
+          path: kong/g10-last-run.log
+          if-no-files-found: ignore
+          retention-days: 3

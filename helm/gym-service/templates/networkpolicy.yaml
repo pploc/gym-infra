@@ -11,6 +11,13 @@ spec:
       {{- include "gym-service.selectorLabels" . | nindent 6 }}
   policyTypes:
     - Ingress
+    {{- if .Values.networkPolicy.egress }}
+    - Egress
+    {{- end }}
   ingress:
     {{- toYaml .Values.networkPolicy.ingress | nindent 4 }}
+  {{- with .Values.networkPolicy.egress }}
+  egress:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 {{- end }}

@@ -40,7 +40,7 @@ service:
   type: ClusterIP
   grpcPort: 50051
   httpPort: 8080
-  metricsPort: 9090
+  metricsPort: 9090 # Set null when service has no metrics listener.
 
 config:
   logLevel: "INFO"
@@ -145,6 +145,20 @@ volumes: []
 
 secrets: {}
 
+# Disabled by default. Enable only for services whose released migration runner and SQL are declared below.
+migration:
+  enabled: false
+  image: ""
+  command: []
+  env: []
+  sql: ""
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+  networkPolicy:
+    egress: []
+
 networkPolicy:
   enabled: true
   ingress:
@@ -166,3 +180,4 @@ networkPolicy:
           port: 8080
         - protocol: TCP
           port: 50051
+  egress: []

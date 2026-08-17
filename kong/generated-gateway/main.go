@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	checkinv1 "github.com/pploc/proto-go/checkin/v1"
 	memberv1 "github.com/pploc/proto-go/member/v1"
 	plansv1 "github.com/pploc/proto-go/plans/v1"
 	"google.golang.org/grpc"
@@ -48,6 +49,8 @@ type config struct {
 	memberCA    string
 	plansAddr   string
 	plansCA     string
+	checkinAddr string
+	checkinCA   string
 }
 
 func main() {
@@ -100,25 +103,35 @@ func newHandler(ctx context.Context, cfg config) (http.Handler, func(), error) {
 		_ = memberConn.Close()
 		return nil, nil, fmt.Errorf("dial Plans: %w", err)
 	}
+	checkinConn, err := dial(ctx, cfg.checkinAddr, "ms-gym-checkin", cfg.checkinCA, cfg.gatewayCert, cfg.gatewayKey)
+	if err != nil {
+		_ = memberConn.Close()
+		_ = plansConn.Close()
+		return nil, nil, fmt.Errorf("dial Check-in: %w", err)
+	}
+	closeConnections := func() {
+		_ = memberConn.Close()
+		_ = plansConn.Close()
+		_ = checkinConn.Close()
+	}
 	mux := runtime.NewServeMux(
 		runtime.WithIncomingHeaderMatcher(rejectIncomingHeader),
 		runtime.WithMetadata(outgoingMetadata),
 		runtime.WithErrorHandler(promoteErrorCode),
 	)
 	if err := memberv1.RegisterMemberServiceHandler(ctx, mux, memberConn); err != nil {
-		_ = memberConn.Close()
-		_ = plansConn.Close()
+		closeConnections()
 		return nil, nil, fmt.Errorf("register Member: %w", err)
 	}
 	if err := plansv1.RegisterPlansServiceHandler(ctx, mux, plansConn); err != nil {
-		_ = memberConn.Close()
-		_ = plansConn.Close()
+		closeConnections()
 		return nil, nil, fmt.Errorf("register Plans: %w", err)
 	}
-	return mux, func() {
-		_ = memberConn.Close()
-		_ = plansConn.Close()
-	}, nil
+	if err := checkinv1.RegisterCheckInServiceHandler(ctx, mux, checkinConn); err != nil {
+		closeConnections()
+		return nil, nil, fmt.Errorf("register Check-in: %w", err)
+	}
+	return mux, closeConnections, nil
 }
 
 func loadConfig() (config, error) {
@@ -133,6 +146,8 @@ func loadConfig() (config, error) {
 		memberCA:    requiredEnv("MEMBER_GRPC_SERVER_CA"),
 		plansAddr:   requiredEnv("PLANS_GRPC_ADDR"),
 		plansCA:     requiredEnv("PLANS_GRPC_SERVER_CA"),
+		checkinAddr: requiredEnv("CHECKIN_GRPC_ADDR"),
+		checkinCA:   requiredEnv("CHECKIN_GRPC_SERVER_CA"),
 	}
 	if cfg.httpsAddr == "" {
 		cfg.httpsAddr = ":8443"
@@ -142,7 +157,8 @@ func loadConfig() (config, error) {
 		"TLS_CLIENT_CA": cfg.clientCA, "TLS_CLIENT_CERT": cfg.gatewayCert,
 		"TLS_CLIENT_KEY": cfg.gatewayKey, "MEMBER_GRPC_ADDR": cfg.memberAddr,
 		"MEMBER_GRPC_SERVER_CA": cfg.memberCA, "PLANS_GRPC_ADDR": cfg.plansAddr,
-		"PLANS_GRPC_SERVER_CA": cfg.plansCA,
+		"PLANS_GRPC_SERVER_CA": cfg.plansCA, "CHECKIN_GRPC_ADDR": cfg.checkinAddr,
+		"CHECKIN_GRPC_SERVER_CA": cfg.checkinCA,
 	} {
 		if value == "" {
 			return config{}, fmt.Errorf("%s is required", name)

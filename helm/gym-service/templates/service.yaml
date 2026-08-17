@@ -15,9 +15,11 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
-    - port: {{ .Values.service.metricsPort }}
+    {{- with .Values.service.metricsPort }}
+    - port: {{ . }}
       targetPort: metrics
       protocol: TCP
       name: metrics
+    {{- end }}
   selector:
     {{- include "gym-service.selectorLabels" . | nindent 4 }}

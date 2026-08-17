@@ -1,0 +1,218 @@
+# Check-in public traffic ends at generated gateway. This service receives only gateway mTLS gRPC.
+nameOverride: ms-gym-checkin
+
+image:
+  repository: ghcr.io/pploc/ms-gym-checkin
+  tag: "27e9f71ce12f6dc4b47b35614dc562ceb2651de1"
+
+serviceAccount:
+  create: true
+  name: ms-gym-checkin
+  # Production overlay sets eks.amazonaws.com/role-arn after IRSA role provisioning.
+  annotations: {}
+  automount: false
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  grpcPort: 50051
+  httpPort: 8080
+  metricsPort: null
+
+probes:
+  enabled: true
+  liveness:
+    path: /healthz
+    port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    path: /readyz
+    port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+  startup:
+    enabled: true
+    path: /healthz
+    port: http
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+autoscaling:
+  enabled: false
+replicaCount: 2
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+istio:
+  enabled: false
+ingress:
+  enabled: false
+
+env:
+  - name: GRPC_ADDR
+    value: ":50051"
+  - name: HTTP_ADDR
+    value: ":8080"
+  - name: CHECKIN_GRPC_SERVER_CERT
+    value: /var/run/checkin-mtls/server.crt
+  - name: CHECKIN_GRPC_SERVER_KEY
+    value: /var/run/checkin-mtls/server.key
+  - name: CHECKIN_GRPC_CLIENT_CA
+    value: /var/run/checkin-mtls/client-ca.crt
+  - name: MEMBER_GRPC_ADDR
+    valueFrom:
+      secretKeyRef:
+        name: ms-gym-checkin-runtime
+        key: member-grpc-addr
+  - name: MEMBER_GRPC_CERT
+    value: /var/run/checkin-mtls/client.crt
+  - name: MEMBER_GRPC_KEY
+    value: /var/run/checkin-mtls/client.key
+  - name: MEMBER_GRPC_CA
+    value: /var/run/checkin-mtls/member-ca.crt
+  - name: PLANS_GRPC_ADDR
+    valueFrom:
+      secretKeyRef:
+        name: ms-gym-checkin-runtime
+        key: plans-grpc-addr
+  - name: PLANS_GRPC_CERT
+    value: /var/run/checkin-mtls/client.crt
+  - name: PLANS_GRPC_KEY
+    value: /var/run/checkin-mtls/client.key
+  - name: PLANS_GRPC_CA
+    value: /var/run/checkin-mtls/plans-ca.crt
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: ms-gym-checkin-runtime
+        key: database-url
+  - name: AWS_REGION
+    valueFrom:
+      secretKeyRef:
+        name: ms-gym-checkin-runtime
+        key: aws-region
+  - name: KMS_KEY_ID
+    valueFrom:
+      secretKeyRef:
+        name: ms-gym-checkin-runtime
+        key: kms-key-id
+  - name: KAFKA_BROKERS
+    valueFrom:
+      secretKeyRef:
+        name: ms-gym-checkin-runtime
+        key: kafka-brokers
+  - name: SCHEMA_REGISTRY_URL
+    valueFrom:
+      secretKeyRef:
+        name: ms-gym-checkin-runtime
+        key: schema-registry-url
+
+volumeMounts:
+  - name: grpc-mtls
+    mountPath: /var/run/checkin-mtls
+    readOnly: true
+  - name: tmp
+    mountPath: /tmp
+volumes:
+  - name: grpc-mtls
+    secret:
+      secretName: ms-gym-checkin-grpc-mtls
+  - name: tmp
+    emptyDir: {}
+
+# No Kong-to-Check-in native gRPC edge. HTTP 8080 is observers-only.
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-api-gateway
+      ports:
+        - protocol: TCP
+          port: 50051
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-member
+      ports:
+        - protocol: TCP
+          port: 50051
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-plans
+      ports:
+        - protocol: TCP
+          port: 50051
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: yugabyte
+      ports:
+        - protocol: TCP
+          port: 5433
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: schema-registry
+      ports:
+        - protocol: TCP
+          port: 8081
+
+# Platform applies migrations/001_init.sql through its controlled migration process before rollout.
+# App startup never applies SQL. Helm migration support stays disabled until platform supplies
+# a digest-pinned YSQL-compatible runner and controlled retry policy.
+migration:
+  enabled: false

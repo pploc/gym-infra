@@ -42,8 +42,10 @@ spec:
               containerPort: {{ .Values.service.grpcPort }}
             - name: http
               containerPort: {{ .Values.service.httpPort }}
+            {{- with .Values.service.metricsPort }}
             - name: metrics
-              containerPort: {{ .Values.service.metricsPort }}
+              containerPort: {{ . }}
+            {{- end }}
           {{- if .Values.probes.enabled }}
           livenessProbe:
             httpGet:

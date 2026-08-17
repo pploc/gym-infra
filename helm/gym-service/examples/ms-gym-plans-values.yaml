@@ -81,6 +81,13 @@ networkPolicy:
         - protocol: TCP
           port: 50051
     - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-checkin
+      ports:
+        - protocol: TCP
+          port: 50051
+    - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: monitoring

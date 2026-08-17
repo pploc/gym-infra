@@ -1,0 +1,177 @@
+# Draft G10 fixture. run-g10.sh rejects this until a finalized digest lock exists.
+name: gym-g10
+
+services:
+  yugabyte:
+    image: ${G10_YUGABYTE_IMAGE:?G10_YUGABYTE_IMAGE is required}
+    command: ["bin/yugabyted", "start", "--background=false"]
+    healthcheck:
+      test: ["CMD-SHELL", "ysqlsh -h \"$$(hostname)\" -c 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  localstack:
+    image: ${G10_LOCALSTACK_IMAGE:?G10_LOCALSTACK_IMAGE is required}
+    environment:
+      SERVICES: kms
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:4566/_localstack/health >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  kms-init:
+    image: ${G10_LOCALSTACK_IMAGE:?G10_LOCALSTACK_IMAGE is required}
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    command: ["sh", "-ec", "aws --endpoint-url=http://localstack:4566 kms describe-key --key-id alias/ms-gym-checkin-qr-root >/dev/null 2>&1 || { key_id=$$(aws --endpoint-url=http://localstack:4566 kms create-key --description 'ms-gym-checkin G10 QR root key' --query KeyMetadata.KeyId --output text); aws --endpoint-url=http://localstack:4566 kms create-alias --alias-name alias/ms-gym-checkin-qr-root --target-key-id \"$$key_id\"; }"]
+
+  kafka:
+    image: ${G10_KAFKA_IMAGE:?G10_KAFKA_IMAGE is required}
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+  schema-registry:
+    image: ${G10_SCHEMA_REGISTRY_IMAGE:?G10_SCHEMA_REGISTRY_IMAGE is required}
+    depends_on:
+      kafka:
+        condition: service_started
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
+
+  checkin-migrate:
+    image: ${G10_YUGABYTE_IMAGE:?G10_YUGABYTE_IMAGE is required}
+    depends_on:
+      yugabyte:
+        condition: service_healthy
+    volumes:
+      - ${G10_CHECKIN_ROOT:?G10_CHECKIN_ROOT is required}/migrations:/migrations:ro
+    command: ["sh", "-ec", "ysqlsh -h yugabyte -c 'CREATE DATABASE checkin_db' || true; ysqlsh -h yugabyte -d checkin_db -f /migrations/001_init.sql; ysqlsh -h yugabyte -d checkin_db -f /migrations/002_kms_cutover.sql"]
+
+  ms-gym-identifier:
+    build:
+      context: ${G10_IDENTIFIER_ROOT:?G10_IDENTIFIER_ROOT is required}
+      secrets: [github_token]
+
+  ms-gym-member:
+    build:
+      context: ${G10_MEMBER_ROOT:?G10_MEMBER_ROOT is required}
+      secrets: [github_token]
+
+  ms-gym-plans:
+    build:
+      context: ${G10_PLANS_ROOT:?G10_PLANS_ROOT is required}
+      secrets: [github_token]
+
+  ms-gym-checkin:
+    build:
+      context: ${G10_CHECKIN_ROOT:?G10_CHECKIN_ROOT is required}
+      secrets: [github_token]
+    depends_on:
+      checkin-migrate:
+        condition: service_completed_successfully
+      kms-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_started
+      schema-registry:
+        condition: service_started
+      ms-gym-member:
+        condition: service_started
+      ms-gym-plans:
+        condition: service_started
+    environment:
+      GRPC_ADDR: ":50051"
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: ${G10_CHECKIN_DATABASE_URL:?G10_CHECKIN_DATABASE_URL is required}
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      KMS_ENDPOINT_URL: http://localstack:4566
+      KMS_KEY_ID: alias/ms-gym-checkin-qr-root
+      KAFKA_BROKERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CHECKIN_GRPC_SERVER_CERT: /run/mtls/ms-gym-checkin.crt
+      CHECKIN_GRPC_SERVER_KEY: /run/mtls/ms-gym-checkin.key
+      CHECKIN_GRPC_CLIENT_CA: /run/mtls/g10-ca.crt
+      MEMBER_GRPC_ADDR: ms-gym-member:50051
+      MEMBER_GRPC_CERT: /run/mtls/checkin-client.crt
+      MEMBER_GRPC_KEY: /run/mtls/checkin-client.key
+      MEMBER_GRPC_CA: /run/mtls/g10-ca.crt
+      PLANS_GRPC_ADDR: ms-gym-plans:50051
+      PLANS_GRPC_CERT: /run/mtls/checkin-client.crt
+      PLANS_GRPC_KEY: /run/mtls/checkin-client.key
+      PLANS_GRPC_CA: /run/mtls/g10-ca.crt
+    volumes:
+      - ./g10-certs/runtime/checkin:/run/mtls:ro
+
+  ms-gym-api-gateway:
+    image: ${G10_GATEWAY_IMAGE:?G10_GATEWAY_IMAGE is required}
+    depends_on:
+      ms-gym-member:
+        condition: service_started
+      ms-gym-plans:
+        condition: service_started
+      ms-gym-checkin:
+        condition: service_started
+    environment:
+      HTTPS_ADDR: ":8443"
+      TLS_SERVER_CERT: /run/mtls/ms-gym-api-gateway-server.crt
+      TLS_SERVER_KEY: /run/mtls/ms-gym-api-gateway-server.key
+      TLS_CLIENT_CA: /run/mtls/g10-ca.crt
+      TLS_CLIENT_CERT: /run/mtls/ms-gym-api-gateway-client.crt
+      TLS_CLIENT_KEY: /run/mtls/ms-gym-api-gateway-client.key
+      MEMBER_GRPC_ADDR: ms-gym-member:50051
+      MEMBER_GRPC_SERVER_CA: /run/mtls/g10-ca.crt
+      PLANS_GRPC_ADDR: ms-gym-plans:50051
+      PLANS_GRPC_SERVER_CA: /run/mtls/g10-ca.crt
+      CHECKIN_GRPC_ADDR: ms-gym-checkin:50051
+      CHECKIN_GRPC_SERVER_CA: /run/mtls/g10-ca.crt
+    volumes:
+      - ./g10-certs/runtime/gateway:/run/mtls:ro
+
+  kong:
+    image: ${G10_KONG_IMAGE:?G10_KONG_IMAGE is required}
+    depends_on:
+      ms-gym-identifier:
+        condition: service_started
+      ms-gym-api-gateway:
+        condition: service_started
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8443 ssl http2
+      KONG_ADMIN_LISTEN: "off"
+      KONG_SSL_CERT: /run/mtls/kong-proxy.crt
+      KONG_SSL_CERT_KEY: /run/mtls/kong-proxy.key
+      KONG_PLUGINS: bundled,gym-jwt-claims
+      KONG_LUA_PACKAGE_PATH: /opt/?.lua;/opt/?/init.lua;;
+    volumes:
+      - ./g10-rendered-kong.yml:/usr/local/kong/declarative/kong.yml:ro
+      - ./g10-certs/runtime/kong:/run/mtls:ro
+      - ./plugins/gym-jwt-claims:/opt/kong/plugins/gym-jwt-claims:ro
+    ports: ["8443:8443"]
+
+secrets:
+  github_token:
+    environment: GITHUB_TOKEN

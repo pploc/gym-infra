@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0
-	github.com/pploc/proto-go v1.6.1
+	github.com/pploc/proto-go v1.7.1
 	google.golang.org/grpc v1.83.0
 )
 

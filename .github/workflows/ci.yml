@@ -35,6 +35,14 @@ jobs:
       release_name: ms-gym-member
       values_file: helm/gym-service/examples/ms-gym-member-values.yaml
 
+  helm-service-checkin-example:
+    name: Helm gym-service Check-in example
+    uses: ./.github/workflows/helm-validate.yml
+    with:
+      chart_path: helm/gym-service
+      release_name: ms-gym-checkin
+      values_file: helm/gym-service/examples/ms-gym-checkin-values.yaml
+
   helm-infra:
     name: Helm gym-infra
     uses: ./.github/workflows/helm-validate.yml
@@ -89,13 +97,18 @@ jobs:
         run: |
           set -euo pipefail
           sh -n kong/run-g9.sh kong/g9-business-check.sh kong/g9-compatibility-check.sh kong/verify-openapi-types.sh
+          sh -n kong/run-g10.sh kong/g10-business-check.sh kong/generate-g10-certs.sh
           test "$(sha256sum kong/g9-java.buf.gen.yaml | cut -d " " -f1)" = c96b65231ccc762d3d5ee25ea33cb0301c92ea13252554c1107e3181fcd4d5b6
-          python3 -m py_compile kong/render-g9-config.py kong/materialize-g9.py kong/validate-g9-lock.py kong/sanitize-g9-evidence.py
+          python3 -m py_compile kong/render-g9-config.py kong/materialize-g9.py kong/validate-g9-lock.py kong/sanitize-g9-evidence.py kong/render-g10-config.py kong/validate-g10-lock.py
           python3 kong/validate-g9-lock.py kong/g9-release-lock.json
-          python3 -m unittest kong/materialize-g9_test.py kong/validate-g9-lock_test.py kong/sanitize-g9-evidence_test.py
+          python3 kong/validate-g10-lock.py kong/g10-release-lock.json
+          python3 kong/render-g10-config.py --manifest ../gym-proto/contracts/v1/http/active-operations.yaml --template kong/g10-kong-template.yml --cert-dir /tmp/g10-certs --output /tmp/g10-rendered.yml --verify-only
+          python3 -m unittest kong/materialize-g9_test.py kong/validate-g9-lock_test.py kong/sanitize-g9-evidence_test.py kong/render-g10-config_test.py kong/validate-g10-lock_test.py
           docker compose -f kong/docker-compose.yml config --quiet
           G9_PROTO_ROOT=/tmp/g9-proto G9_IDENTIFIER_ROOT=/tmp/g9-identifier G9_MEMBER_ROOT=/tmp/g9-member G9_PLANS_ROOT=/tmp/g9-plans G9_GATEWAY_IMAGE=ghcr.io/pploc/ms-gym-api-gateway@sha256:$(printf '0%.0s' $(seq 1 64)) docker compose -f kong/g9-compose.yml config --quiet
+          G10_YUGABYTE_IMAGE=yugabytedb/yugabyte@sha256:$(printf '0%.0s' $(seq 1 64)) G10_LOCALSTACK_IMAGE=localstack/localstack@sha256:$(printf '1%.0s' $(seq 1 64)) G10_KAFKA_IMAGE=apache/kafka@sha256:$(printf '2%.0s' $(seq 1 64)) G10_SCHEMA_REGISTRY_IMAGE=confluentinc/cp-schema-registry@sha256:$(printf '3%.0s' $(seq 1 64)) G10_IDENTIFIER_ROOT=/tmp/g10-identifier G10_MEMBER_ROOT=/tmp/g10-member G10_PLANS_ROOT=/tmp/g10-plans G10_CHECKIN_ROOT=/tmp/g10-checkin G10_CHECKIN_DATABASE_URL=postgres://yugabyte@x/checkin_db G10_GATEWAY_IMAGE=ghcr.io/pploc/ms-gym-api-gateway@sha256:$(printf '4%.0s' $(seq 1 64)) G10_KONG_IMAGE=kong@sha256:$(printf '5%.0s' $(seq 1 64)) docker compose -f kong/g10-compose.yml config --quiet
           (cd kong/tests && go test -run '^$' ./...)
+          (cd kong/generated-gateway && GOWORK=off go test ./...)
 
   docker-go-sample:
     name: Docker go-service (push on branch)

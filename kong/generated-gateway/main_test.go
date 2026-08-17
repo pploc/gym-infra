@@ -12,6 +12,26 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+func TestGivenMissingCheckinConfiguration_WhenLoadingConfiguration_ThenReturnsRequiredError(t *testing.T) {
+	// given
+	for name, value := range map[string]string{
+		"TLS_SERVER_CERT": "server.crt", "TLS_SERVER_KEY": "server.key", "TLS_CLIENT_CA": "client-ca.crt",
+		"TLS_CLIENT_CERT": "gateway.crt", "TLS_CLIENT_KEY": "gateway.key", "MEMBER_GRPC_ADDR": "member:50051",
+		"MEMBER_GRPC_SERVER_CA": "member-ca.crt", "PLANS_GRPC_ADDR": "plans:50051", "PLANS_GRPC_SERVER_CA": "plans-ca.crt",
+		"CHECKIN_GRPC_ADDR": "checkin:50051", "CHECKIN_GRPC_SERVER_CA": "",
+	} {
+		t.Setenv(name, value)
+	}
+
+	// when
+	_, err := loadConfig()
+
+	// then
+	if err == nil || err.Error() != "CHECKIN_GRPC_SERVER_CA is required" {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestGivenTrustedAndForgedHeaders_WhenBuildingMetadata_ThenOnlyApprovedSingleValuesForward(t *testing.T) {
 	// given
 	request := httptest.NewRequest("GET", "/api/v1/members/member-1", nil)

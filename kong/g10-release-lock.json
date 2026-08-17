@@ -1,0 +1,23 @@
+{
+  "lockVersion": 1,
+  "status": "draft-not-release-evidence",
+  "gymProto": {
+    "version": "v7.0.2",
+    "sourceSha": "e29a1327d004a2f19676227c1668365ffa45a293"
+  },
+  "repositories": {
+    "gymProto": {"url": "https://github.com/pploc/gym-proto.git", "sha": "e29a1327d004a2f19676227c1668365ffa45a293"},
+    "identifier": {"url": "https://github.com/pploc/ms-gym-identifier.git", "sha": "def7936c9e54f489aad5aab246b9300697969d90"},
+    "member": {"url": "https://github.com/pploc/ms-gym-member.git", "sha": "ca2c27abde42589161dcb23b99b293dae0ea5e3a"},
+    "plans": {"url": "https://github.com/pploc/ms-gym-plans.git", "sha": "3ea1322ee97a9c1705443c4c0b6dcc22ba6ead5d"},
+    "checkin": {"url": "https://github.com/pploc/ms-gym-checkin.git", "sha": "27e9f71ce12f6dc4b47b35614dc562ceb2651de1"}
+  },
+  "dependencies": {"javaProto": "7.0.2", "goProto": "v1.7.1"},
+  "routes": {"count": 33, "byOwner": {"identity": 12, "member": 7, "plans": 8, "checkin": 6}},
+  "requiredFinalization": [
+    "released kong-proto and canonical OpenAPI SHA-256 checksums",
+    "source-SHA Check-in and generated-gateway image digests",
+    "Kong, Yugabyte, LocalStack KMS, Kafka, and Schema Registry image digests",
+    "manifest and template SHA-256 checksums"
+  ]
+}

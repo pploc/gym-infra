@@ -38,5 +38,11 @@ kong/g9-private/
 kong/g9-observed-errors.yaml
 kong/g9-sanitized-evidence.yaml
 kong/g9-release-assets/
+kong/g10-certs/
+kong/g10-rendered-kong.yml
+kong/g10-last-run.log
+kong/g10-business-status
+kong/g10-private/
+kong/g10-release-assets/
 kong/__pycache__/
 kong/generated-gateway/proto-go/
