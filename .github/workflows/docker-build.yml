@@ -46,11 +46,6 @@ on:
 jobs:
   build-push:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      # needed to delete old GHCR versions when pruning
-      # (org may still require package admin for delete)
     steps:
       - uses: actions/checkout@v4
 
