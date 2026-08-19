@@ -91,8 +91,10 @@ jobs:
           cache-dependency-path: kong/tests/go.sum
       - name: Install YAML parser
         run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
-      - name: Assert exact NetworkPolicies
-        run: helm/gym-service/tests/networkpolicy_test.sh
+      - name: Assert exact Helm renders
+        run: |
+          helm/gym-service/tests/networkpolicy_test.sh
+          helm/gym-service/tests/image_test.sh
       - name: Check Stage 3 scripts and Compose
         run: |
           set -euo pipefail

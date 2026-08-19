@@ -8,7 +8,9 @@ fullnameOverride: ""
 image:
   repository: ghcr.io/pploc/gym-service
   pullPolicy: IfNotPresent
-  # Prefer immutable tags (:sha) in real deploys; override via --set image.tag=
+  # Set digest to render repository@sha256:... for release deployments.
+  digest: ""
+  # Tag remains available for local and non-release deployments.
   tag: "develop"
 
 imagePullSecrets: []
