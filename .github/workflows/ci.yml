@@ -82,6 +82,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: pploc/gym-proto
+          ref: v7.0.2
+          path: gym-proto
       - name: Setup Helm
         uses: azure/setup-helm@v4
       - name: Setup Go
@@ -104,7 +109,7 @@ jobs:
           python3 -m py_compile kong/render-g9-config.py kong/materialize-g9.py kong/validate-g9-lock.py kong/sanitize-g9-evidence.py kong/render-g10-config.py kong/validate-g10-lock.py
           python3 kong/validate-g9-lock.py kong/g9-release-lock.json
           python3 kong/validate-g10-lock.py kong/g10-release-lock.json
-          python3 kong/render-g10-config.py --manifest ../gym-proto/contracts/v1/http/active-operations.yaml --template kong/g10-kong-template.yml --cert-dir /tmp/g10-certs --output /tmp/g10-rendered.yml --verify-only
+          python3 kong/render-g10-config.py --manifest gym-proto/contracts/v1/http/active-operations.yaml --template kong/g10-kong-template.yml --cert-dir /tmp/g10-certs --output /tmp/g10-rendered.yml --verify-only
           python3 -m unittest kong/materialize-g9_test.py kong/validate-g9-lock_test.py kong/sanitize-g9-evidence_test.py kong/render-g10-config_test.py kong/validate-g10-lock_test.py
           docker compose -f kong/docker-compose.yml config --quiet
           G9_PROTO_ROOT=/tmp/g9-proto G9_IDENTIFIER_ROOT=/tmp/g9-identifier G9_MEMBER_ROOT=/tmp/g9-member G9_PLANS_ROOT=/tmp/g9-plans G9_GATEWAY_IMAGE=ghcr.io/pploc/ms-gym-api-gateway@sha256:$(printf '0%.0s' $(seq 1 64)) docker compose -f kong/g9-compose.yml config --quiet
