@@ -3,10 +3,10 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 lock=$root/g10-release-lock.json
-workspace=$(mktemp -d "${TMPDIR:-/tmp}/gym-g10.XXXXXX")
-rmdir "$workspace"
+workspace_parent=$(mktemp -d "${TMPDIR:-/tmp}/gym-g10-parent.XXXXXX")
+workspace=$workspace_parent/source
 paths=$(mktemp "${TMPDIR:-/tmp}/gym-g10-paths.XXXXXX")
-workspace=$(CDPATH= cd -- "$workspace" && pwd)
+# materialize-g10.py creates absent workspace with mode 0700.
 raw=$root/g10-raw-evidence.yaml
 safe=$root/g10-sanitized-evidence.yaml
 compose="docker compose -f $root/g10-compose.yml"
@@ -17,7 +17,7 @@ cleanup() {
   result=$?
   $compose down --remove-orphans >/dev/null 2>&1 || true
   rm -f "$paths" "$raw"
-  rm -rf "$workspace" "$root/g10-certs" "$root/g10-rendered-kong.yml"
+  rm -rf "$workspace_parent" "$root/g10-certs" "$root/g10-rendered-kong.yml"
   exit "$result"
 }
 failed() {
