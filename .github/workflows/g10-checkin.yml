@@ -24,19 +24,27 @@ permissions:
 
 jobs:
   g10:
-    name: G10 draft fixture gate
+    name: G10 locked fixture gate
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.G10_READ_TOKEN || github.token }}
+      GITHUB_ACTOR: ${{ github.actor }}
     steps:
       - uses: actions/checkout@v4
-      - name: Validate G10 draft fixture boundary
+      - name: Validate G10 locked fixture
         run: ./kong/run-g10.sh
+      - name: Require sanitized evidence
+        run: test -s kong/g10-sanitized-evidence.yaml
       - name: Upload sanitized G10 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: g10-sanitized-${{ github.sha }}
           path: kong/g10-sanitized-evidence.yaml
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 30
       - name: Upload private G10 failure diagnostics
         if: failure()
