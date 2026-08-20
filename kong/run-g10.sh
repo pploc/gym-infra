@@ -4,7 +4,9 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 lock=$root/g10-release-lock.json
 workspace=$(mktemp -d "${TMPDIR:-/tmp}/gym-g10.XXXXXX")
+rmdir "$workspace"
 paths=$(mktemp "${TMPDIR:-/tmp}/gym-g10-paths.XXXXXX")
+workspace=$(CDPATH= cd -- "$workspace" && pwd)
 raw=$root/g10-raw-evidence.yaml
 safe=$root/g10-sanitized-evidence.yaml
 compose="docker compose -f $root/g10-compose.yml"
