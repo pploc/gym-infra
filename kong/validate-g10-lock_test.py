@@ -16,27 +16,34 @@ class ValidateG10LockTest(unittest.TestCase):
     def setUp(self):
         self.lock = json.loads((ROOT / "g10-release-lock.json").read_text())
 
-    def test_given_draft_lock_when_validated_then_accept(self):
+    def test_given_final_lock_when_validated_then_accept(self):
         # given / when / then
-        VALIDATE.given_g10_draft_lock_when_validated_then_require_known_sources(self.lock)
+        VALIDATE.given_final_g10_lock_when_validated_then_require_immutable_inputs(self.lock)
 
-    def test_given_missing_checkin_source_when_validated_then_reject(self):
-        # given
+    def test_given_mismatched_proto_sha_when_validated_then_reject(self):
         lock = deepcopy(self.lock)
-        del lock["repositories"]["checkin"]
+        lock["gymProto"]["sourceSha"] = "e29a1327d004a2f19676227c1668365ffa45a293"
+        with self.assertRaisesRegex(ValueError, "source SHA"):
+            VALIDATE.given_final_g10_lock_when_validated_then_require_immutable_inputs(lock)
 
-        # when / then
+    def test_given_annotated_proto_sha_with_matching_record_when_validated_then_reject(self):
+        lock = deepcopy(self.lock)
+        lock["gymProto"]["sourceSha"] = "e29a1327d004a2f19676227c1668365ffa45a293"
+        lock["repositories"]["gymProto"]["sha"] = lock["gymProto"]["sourceSha"]
+        with self.assertRaisesRegex(ValueError, "source SHA"):
+            VALIDATE.given_final_g10_lock_when_validated_then_require_immutable_inputs(lock)
+
+    def test_given_tagged_image_when_validated_then_reject(self):
+        lock = deepcopy(self.lock)
+        lock["images"]["checkin"] = "ghcr.io/pploc/ms-gym-checkin:develop"
+        with self.assertRaisesRegex(ValueError, "digest pinned"):
+            VALIDATE.given_final_g10_lock_when_validated_then_require_immutable_inputs(lock)
+
+    def test_given_missing_repository_when_validated_then_reject(self):
+        lock = deepcopy(self.lock)
+        del lock["repositories"]["infrastructure"]
         with self.assertRaisesRegex(ValueError, "repository set"):
-            VALIDATE.given_g10_draft_lock_when_validated_then_require_known_sources(lock)
-
-    def test_given_finalized_status_when_validated_then_reject(self):
-        # given
-        lock = deepcopy(self.lock)
-        lock["status"] = "final"
-
-        # when / then
-        with self.assertRaisesRegex(ValueError, "draft"):
-            VALIDATE.given_g10_draft_lock_when_validated_then_require_known_sources(lock)
+            VALIDATE.given_final_g10_lock_when_validated_then_require_immutable_inputs(lock)
 
 
 if __name__ == "__main__":

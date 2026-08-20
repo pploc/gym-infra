@@ -1,23 +1,83 @@
 {
-  "lockVersion": 1,
-  "status": "draft-not-release-evidence",
+  "lockVersion": 2,
+  "status": "final-technical-gates-pending",
   "gymProto": {
     "version": "v7.0.2",
-    "sourceSha": "e29a1327d004a2f19676227c1668365ffa45a293"
+    "sourceSha": "8da83a33411d10442a854fe1d05d34356fe85643",
+    "releaseUrl": "https://github.com/pploc/gym-proto/releases/tag/v7.0.2"
   },
   "repositories": {
-    "gymProto": {"url": "https://github.com/pploc/gym-proto.git", "sha": "e29a1327d004a2f19676227c1668365ffa45a293"},
-    "identifier": {"url": "https://github.com/pploc/ms-gym-identifier.git", "sha": "def7936c9e54f489aad5aab246b9300697969d90"},
-    "member": {"url": "https://github.com/pploc/ms-gym-member.git", "sha": "ca2c27abde42589161dcb23b99b293dae0ea5e3a"},
-    "plans": {"url": "https://github.com/pploc/ms-gym-plans.git", "sha": "3ea1322ee97a9c1705443c4c0b6dcc22ba6ead5d"},
-    "checkin": {"url": "https://github.com/pploc/ms-gym-checkin.git", "sha": "27e9f71ce12f6dc4b47b35614dc562ceb2651de1"}
+    "gymProto": {
+      "url": "https://github.com/pploc/gym-proto.git",
+      "sha": "8da83a33411d10442a854fe1d05d34356fe85643"
+    },
+    "identifier": {
+      "url": "https://github.com/pploc/ms-gym-identifier.git",
+      "sha": "def7936c9e54f489aad5aab246b9300697969d90"
+    },
+    "member": {
+      "url": "https://github.com/pploc/ms-gym-member.git",
+      "sha": "989ee3284ea584f1c4876ab0e29143e8158f88c4"
+    },
+    "plans": {
+      "url": "https://github.com/pploc/ms-gym-plans.git",
+      "sha": "c0b9f16284c5605032267440bb478d04cebb30d8"
+    },
+    "checkin": {
+      "url": "https://github.com/pploc/ms-gym-checkin.git",
+      "sha": "e26e2089338808f53706e91ee575607646bf631f"
+    },
+    "infrastructure": {
+      "url": "https://github.com/pploc/gym-infra.git",
+      "sha": "d44838b8326da4de94e7512292d8c21c948085b3"
+    }
   },
-  "dependencies": {"javaProto": "7.0.2", "goProto": "v1.7.1"},
-  "routes": {"count": 33, "byOwner": {"identity": 12, "member": 7, "plans": 8, "checkin": 6}},
+  "dependencies": {
+    "javaProto": "7.0.2",
+    "goProto": "v1.7.1"
+  },
+  "routes": {
+    "count": 33,
+    "byOwner": {
+      "identity": 12,
+      "member": 7,
+      "plans": 8,
+      "checkin": 6
+    },
+    "manifestSha256": "adec2ef4a05d8c1c4942d02413fd56d502eb2e8043360b841f4186b1c3d0aab8",
+    "templateSha256": "474c9d86613455ecdfbac21294a3eeb37d637ebd7644e3050fdbfa74984382af"
+  },
+  "images": {
+    "identifier": "ghcr.io/pploc/ms-gym-identifier@sha256:0d6466c143bc905bb12d5b8d4f24f2188e561bc798771e6dbe60ad98509a6de5",
+    "member": "ghcr.io/pploc/ms-gym-member@sha256:cfa7e4cceaa1cb0fcda7b3c0b11aaaa399c7bb92584a679a0e105bb4657decbc",
+    "plans": "ghcr.io/pploc/ms-gym-plans@sha256:5de9615e8f95685833677311150f8d37cd1c308b499720c58869261cdbcc77f1",
+    "checkin": "ghcr.io/pploc/ms-gym-checkin@sha256:6fbaf44bc9604e580341cf18b6388bcc913886cf6305fb2f0c13a4dad21b8efe",
+    "gateway": "ghcr.io/pploc/ms-gym-api-gateway@sha256:b3cb6ff8be5b0d760b6b527ca267c90d1596eaa499a4c16ee147725943c8f21d",
+    "postgres": "postgres:16-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "redis": "redis:7-alpine@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "yugabyte": "yugabytedb/yugabyte@sha256:3f9cd1b8f520cc78e82ace51174be73343a551148bc6c9a9f821a22f1d2858c5",
+    "localstack": "localstack/localstack@sha256:fc9a03f14f4668f5d874eadb77e5da5461ce735e2ce86b77b0056606c0677dba",
+    "kafka": "apache/kafka@sha256:c9aea96a4813e77e703541b1d8f7d58c9ee05b77353da33684db55c840548791",
+    "schemaRegistry": "confluentinc/cp-schema-registry@sha256:b0f1473e9b724ada5338390346438229206f3568ccee94d78bdff1f37e3c8c52",
+    "kong": "kong:3.8-ubuntu@sha256:250cc9745fde8ce04be060bc8e4338dfc280f54986cb38ef24d03876cb6b6e2f"
+  },
+  "checksums": {
+    "compose": "444745b8b5ff99fa472c4fd4d1ac1f30d9fd792bd4322fd8628ade8287ac302b",
+    "certGenerator": "1ee13fd32c96324252c476ceaac623272ff56956dd4329ae83802a181e9b3de4",
+    "gatewayGoMod": "0fde8ee7d3710158af9a262c8c66fa38d3b0b2127990f3d242dfa81b5980964f",
+    "gatewayGoSum": "adbc3589658ee8ac53d5531f61cd66fc3a5e28ecd57849bbaaaa9d184b3d4ba1",
+    "migration": "87ae5333ed1ddc1e6b06a479566a0ff69a365b72d76cfe24a12670775c73a842"
+  },
+  "protectedRuns": [
+    "https://github.com/pploc/ms-gym-checkin/actions/runs/32371263336",
+    "https://github.com/pploc/ms-gym-member/actions/runs/32370532909",
+    "https://github.com/pploc/ms-gym-plans/actions/runs/32371259239",
+    "https://github.com/pploc/gym-proto/actions/runs/32372731016"
+  ],
   "requiredFinalization": [
-    "released kong-proto and canonical OpenAPI SHA-256 checksums",
-    "source-SHA Check-in and generated-gateway image digests",
-    "Kong, Yugabyte, LocalStack KMS, Kafka, and Schema Registry image digests",
-    "manifest and template SHA-256 checksums"
+    "locked clean-source E2E",
+    "sanitized aggregate evidence",
+    "GitHub protection verification",
+    "owner acceptance"
   ]
 }
