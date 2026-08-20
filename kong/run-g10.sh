@@ -29,6 +29,7 @@ trap cleanup EXIT INT TERM
 python3 "$root/validate-g10-lock.py" "$lock"
 python3 "$root/materialize-g10.py" --lock "$lock" --workspace "$workspace" >"$paths" || failed
 . "$paths"
+export G10_PROTO_ROOT
 
 python3 - "$lock" "$G10_INFRA_ROOT" "$root" <<'PY'
 import hashlib, json, os, subprocess, sys
