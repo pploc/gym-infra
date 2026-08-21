@@ -7,17 +7,22 @@ workspace_parent=$(mktemp -d "${TMPDIR:-/tmp}/gym-g10-parent.XXXXXX")
 workspace=$workspace_parent/source
 paths=$(mktemp "${TMPDIR:-/tmp}/gym-g10-paths.XXXXXX")
 # materialize-g10.py creates absent workspace with mode 0700.
-raw=$root/g10-raw-evidence.yaml
-safe=$root/g10-sanitized-evidence.yaml
-compose="docker compose -f $root/g10-compose.yml"
+
+compose=""
+raw=""
+safe=""
+fixture=""
+rendered=""
+certs=""
+
 
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required for locked source materialization}"
 
 cleanup() {
   result=$?
-  $compose down --remove-orphans >/dev/null 2>&1 || true
-  rm -f "$paths" "$raw"
-  rm -rf "$workspace_parent" "$root/g10-certs" "$root/g10-rendered-kong.yml"
+  [ -z "$compose" ] || $compose down --remove-orphans >/dev/null 2>&1 || true
+  rm -f "$paths" "$raw" "$safe"
+  rm -rf "$workspace_parent" "$certs" "$rendered"
   exit "$result"
 }
 failed() {
@@ -30,8 +35,16 @@ python3 "$root/validate-g10-lock.py" "$lock"
 python3 "$root/materialize-g10.py" --lock "$lock" --workspace "$workspace" >"$paths" || failed
 . "$paths"
 export G10_PROTO_ROOT
+fixture=$G10_INFRA_ROOT/kong
+lock=$root/g10-release-lock.json
+compose="docker compose -f $fixture/g10-compose.yml"
 
-python3 - "$lock" "$G10_INFRA_ROOT" "$root" <<'PY'
+raw=$fixture/g10-raw-evidence.yaml
+safe=$fixture/g10-sanitized-evidence.yaml
+certs=$fixture/g10-certs
+rendered=$fixture/g10-rendered-kong.yml
+
+python3 - "$lock" "$G10_INFRA_ROOT" "$fixture" <<'PY'
 import hashlib, json, os, subprocess, sys
 from pathlib import Path
 lock_path, infra_root, fixture = map(Path, sys.argv[1:])
@@ -50,13 +63,13 @@ for name, path in checks.items():
         raise SystemExit(f"{name} checksum mismatch")
 PY
 
-"$root/generate-g10-certs.sh" "$root/g10-certs"
-find "$root/g10-certs" -type f -name '*.key' -perm /0077 -print -quit | grep -q . && failed || true
-python3 "$root/render-g10-config.py" \
+"$fixture/generate-g10-certs.sh" "$certs"
+find "$certs" -type f -name '*.key' -perm /0077 -print -quit | grep -q . && failed || true
+python3 "$fixture/render-g10-config.py" \
   --manifest "$G10_PROTO_ROOT/contracts/v1/http/active-operations.yaml" \
-  --template "$root/g10-kong-template.yml" \
-  --cert-dir "$root/g10-certs" \
-  --output "$root/g10-rendered-kong.yml" || failed
+  --template "$fixture/g10-kong-template.yml" \
+  --cert-dir "$certs" \
+  --output "$rendered" || failed
 
 eval "$(python3 - "$lock" <<'PY'
 import json, shlex, sys
@@ -73,11 +86,16 @@ $compose config --quiet || failed
 $compose up -d || failed
 
 for _ in $(seq 1 300); do
-  if curl -fsS https://localhost:8443/status --cacert "$root/g10-certs/g10-ca.crt" >/dev/null 2>&1; then
-    "$root/g10-business-check.sh" >"$raw" || failed
-    python3 "$root/sanitize-g10-evidence.py" "$raw" "$safe" || failed
-    printf '%s\n' 'G10 locked E2E and sanitized evidence passed.'
-    exit 0
+  if $compose ps --status running --services | grep -qx kong \
+      && $compose ps --status running --services | grep -qx ms-gym-api-gateway \
+      && $compose ps --status running --services | grep -qx ms-gym-checkin; then
+    if curl --cacert "$certs/g10-ca.crt" -sS -o /dev/null \
+        -w '%{http_code}' https://localhost:8443/status | grep -qx 404; then
+      "$fixture/g10-business-check.sh" >"$raw" || failed
+      python3 "$fixture/sanitize-g10-evidence.py" "$raw" "$safe" || failed
+      printf '%s\n' 'G10 locked E2E and sanitized evidence passed.'
+      exit 0
+    fi
   fi
   sleep 1
 done

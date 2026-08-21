@@ -15,7 +15,7 @@ SPEC.loader.exec_module(RENDER)
 
 class RenderG10ConfigTest(unittest.TestCase):
     def setUp(self):
-        self.manifest = yaml.safe_load((ROOT / "../gym-proto/contracts/v1/http/active-operations.yaml").read_text())
+        self.manifest = yaml.safe_load((ROOT / "../../gym-proto/contracts/v1/http/active-operations.yaml").read_text())
 
     def test_given_released_manifest_when_validated_then_has_exact_checkin_routes(self):
         # given / when

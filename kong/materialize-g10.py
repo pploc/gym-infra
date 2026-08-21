@@ -11,8 +11,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
-NAMES = ("gymProto", "identifier", "member", "plans", "checkin", "infrastructure")
-ENV_NAMES = {name: "G10_" + ("INFRA_ROOT" if name == "infrastructure" else name.upper() + "_ROOT") for name in NAMES}
+ENV_NAMES = {
+    "gymProto": "G10_PROTO_ROOT",
+    "identifier": "G10_IDENTIFIER_ROOT",
+    "member": "G10_MEMBER_ROOT",
+    "plans": "G10_PLANS_ROOT",
+    "checkin": "G10_CHECKIN_ROOT",
+    "infrastructure": "G10_INFRA_ROOT",
+}
+NAMES = tuple(ENV_NAMES)
 
 
 def run(*command: str, cwd: Path | None = None, env: dict[str, str] | None = None) -> str:
