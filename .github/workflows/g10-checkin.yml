@@ -36,6 +36,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: Authenticate GHCR pull
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Verify locked GHCR images
+        run: |
+          set -eu
+          for image in \
+            ghcr.io/pploc/ms-gym-identifier@sha256:0d6466c143bc905bb12d5b8d4f24f2188e561bc798771e6dbe60ad98509a6de5 \
+            ghcr.io/pploc/ms-gym-member@sha256:cfa7e4cceaa1cb0fcda7b3c0b11aaaa399c7bb92584a679a0e105bb4657decbc \
+            ghcr.io/pploc/ms-gym-plans@sha256:5de9615e8f95685833677311150f8d37cd1c308b499720c58869261cdbcc77f1 \
+            ghcr.io/pploc/ms-gym-checkin@sha256:6fbaf44bc9604e580341cf18b6388bcc913886cf6305fb2f0c13a4dad21b8efe \
+            ghcr.io/pploc/ms-gym-api-gateway@sha256:b3cb6ff8be5b0d760b6b527ca267c90d1596eaa499a4c16ee147725943c8f21d; do
+            docker manifest inspect "$image" >/dev/null
+          done
+      - name: Validate G10 locked fixture
       - name: Validate G10 locked fixture
         run: ./kong/run-g10.sh
       - name: Require sanitized evidence
