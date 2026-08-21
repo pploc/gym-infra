@@ -82,7 +82,7 @@ eval "$(python3 - "$lock" <<'PY'
 import json, shlex, sys
 images = json.load(open(sys.argv[1]))["images"]
 for name, image in images.items():
-    env = {"schemaRegistry": "SCHEMA_REGISTRY", "gateway": "GATEWAY"}.get(name, name).upper()
+    env = {"schemaRegistry": "SCHEMA_REGISTRY", "gateway": "GATEWAY", "yugabyte": "YUGABYTE", "localstack": "LOCALSTACK", "kafka": "KAFKA", "kong": "KONG"}.get(name, name).upper()
     print(f"export G10_{env}_IMAGE={shlex.quote(image)}")
 print(f"export G10_POSTGRES_IMAGE={shlex.quote(images['postgres'])}")
 print(f"export G10_REDIS_IMAGE={shlex.quote(images['redis'])}")
