@@ -34,6 +34,8 @@ jobs:
       GITHUB_ACTOR: ${{ github.actor }}
     steps:
       - uses: actions/checkout@v4
+      - name: Authenticate GHCR pull
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
       - name: Validate G10 locked fixture
         run: ./kong/run-g10.sh
       - name: Require sanitized evidence
