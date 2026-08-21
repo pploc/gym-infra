@@ -84,6 +84,18 @@ images = json.load(open(sys.argv[1]))["images"]
 for name, image in images.items():
     env = {"schemaRegistry": "SCHEMA_REGISTRY", "gateway": "GATEWAY", "yugabyte": "YUGABYTE", "localstack": "LOCALSTACK", "kafka": "KAFKA", "kong": "KONG", "postgres": "POSTGRES", "redis": "REDIS"}.get(name, name).upper()
     print(f"export G10_{env}_IMAGE={shlex.quote(image)}")
+print(f"export G10_GATEWAY_IMAGE={shlex.quote(images['gateway'])}")
+print(f"export G10_LOCALSTACK_IMAGE={shlex.quote(images['localstack'])}")
+print(f"export G10_SCHEMA_REGISTRY_IMAGE={shlex.quote(images['schemaRegistry'])}")
+print(f"export G10_POSTGRES_IMAGE={shlex.quote(images['postgres'])}")
+print(f"export G10_REDIS_IMAGE={shlex.quote(images['redis'])}")
+print(f"export G10_YUGABYTE_IMAGE={shlex.quote(images['yugabyte'])}")
+print(f"export G10_KAFKA_IMAGE={shlex.quote(images['kafka'])}")
+print(f"export G10_KONG_IMAGE={shlex.quote(images['kong'])}")
+print(f"export G10_IDENTIFIER_IMAGE={shlex.quote(images['identifier'])}")
+print(f"export G10_MEMBER_IMAGE={shlex.quote(images['member'])}")
+print(f"export G10_PLANS_IMAGE={shlex.quote(images['plans'])}")
+print(f"export G10_CHECKIN_IMAGE={shlex.quote(images['checkin'])}")
 PY
 )"
 export G10_CHECKIN_DATABASE_URL='postgres://yugabyte@yugabyte:5433/checkin_db?sslmode=disable'
