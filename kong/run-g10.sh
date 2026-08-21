@@ -14,6 +14,8 @@ safe=""
 fixture=""
 rendered=""
 certs=""
+diagnostics=$root/g10-last-run.log
+rm -f "$diagnostics" "$root/g10-raw-evidence.yaml" "$root/g10-rendered-kong.yml"
 
 
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required for locked source materialization}"
@@ -21,12 +23,17 @@ certs=""
 cleanup() {
   result=$?
   [ -z "$compose" ] || $compose down --remove-orphans >/dev/null 2>&1 || true
-  rm -f "$paths" "$raw" "$safe"
-  rm -rf "$workspace_parent" "$certs" "$rendered"
+  rm -f "$paths" "$safe"
+  rm -rf "$workspace_parent" "$certs"
   exit "$result"
 }
 failed() {
   printf '%s\n' 'G10 locked E2E failed.' >&2
+  {
+    printf '%s\n' 'G10 locked E2E failed.'
+    [ -z "$compose" ] || $compose ps || true
+  } >"$diagnostics"
+  [ -z "$compose" ] || $compose ps >&2 || true
   exit 1
 }
 trap cleanup EXIT INT TERM

@@ -51,6 +51,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: g10-failure-${{ github.sha }}
-          path: kong/g10-last-run.log
+          path: |
+            kong/g10-last-run.log
+            kong/g10-raw-evidence.yaml
+            kong/g10-rendered-kong.yml
           if-no-files-found: ignore
           retention-days: 3
