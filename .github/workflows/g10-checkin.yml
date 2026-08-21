@@ -48,7 +48,6 @@ jobs:
             docker manifest inspect "$image" >/dev/null
           done
       - name: Validate G10 locked fixture
-      - name: Validate G10 locked fixture
         run: ./kong/run-g10.sh
       - name: Require sanitized evidence
         run: test -s kong/g10-sanitized-evidence.yaml
