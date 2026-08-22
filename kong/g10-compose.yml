@@ -189,7 +189,7 @@ services:
     volumes:
       - ./g10-certs/runtime/plans:/run/mtls:ro
     healthcheck:
-      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/readiness HTTP/1.0\\\\r\\\\n\\\\r\\\\n' >&3 && grep -q '200' <&3\""]
+      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\\\\r\\\\n\\\\r\\\\n' >&3 && grep -q '200' <&3\""]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -220,7 +220,7 @@ services:
     volumes:
       - ./g10-certs/runtime/member:/run/mtls:ro
     healthcheck:
-      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/readiness HTTP/1.0\\\\r\\\\n\\\\r\\\\n' >&3 && grep -q '200' <&3\""]
+      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\\\\r\\\\n\\\\r\\\\n' >&3 && grep -q '200' <&3\""]
       interval: 5s
       timeout: 5s
       retries: 30
