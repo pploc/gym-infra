@@ -85,7 +85,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d identity_db"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d identity_db"]
       interval: 2s
       timeout: 2s
       retries: 30
@@ -97,7 +97,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d gym_member"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d gym_member"]
       interval: 2s
       timeout: 2s
       retries: 30
@@ -109,7 +109,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d plans_db"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d plans_db"]
       interval: 2s
       timeout: 2s
       retries: 30
