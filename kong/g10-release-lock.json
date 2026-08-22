@@ -29,7 +29,7 @@
     },
     "infrastructure": {
       "url": "https://github.com/pploc/gym-infra.git",
-      "sha": "45bf98392cf8f8ddfb870f6a1885a2cb03119f95"
+      "sha": "45bf9832527512bd2443befbe3990e352400e9f4"
     }
   },
   "dependencies": {
