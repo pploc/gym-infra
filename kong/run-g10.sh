@@ -32,8 +32,10 @@ failed() {
   {
     printf '%s\n' 'G10 locked E2E failed.'
     [ -z "$compose" ] || $compose ps || true
+    [ -z "$compose" ] || $compose logs --no-color --tail=200 ms-gym-plans ms-gym-member ms-gym-identifier ms-gym-checkin ms-gym-api-gateway kong || true
   } >"$diagnostics"
   [ -z "$compose" ] || $compose ps >&2 || true
+  [ -z "$compose" ] || $compose logs --no-color --tail=200 ms-gym-plans ms-gym-member ms-gym-identifier ms-gym-checkin ms-gym-api-gateway kong >&2 || true
   exit 1
 }
 trap cleanup EXIT INT TERM
