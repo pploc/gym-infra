@@ -73,7 +73,8 @@ for name, path in checks.items():
 PY
 
 "$fixture/generate-g10-certs.sh" "$certs"
-find "$certs" -type f -name '*.key' -perm /0077 -print -quit | grep -q . && failed || true
+find "$certs" -path "$certs/runtime" -prune -o -type f -name '*.key' -perm /0077 -print -quit | grep -q . && failed || true
+find "$certs/runtime" -type f -name '*.key' ! -perm -0004 -print -quit | grep -q . && failed || true
 python3 "$fixture/render-g10-config.py" \
   --manifest "$G10_PROTO_ROOT/contracts/v1/http/active-operations.yaml" \
   --template "$fixture/g10-kong-template.yml" \
