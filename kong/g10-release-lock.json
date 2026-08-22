@@ -55,7 +55,7 @@
     "gateway": "ghcr.io/pploc/ms-gym-api-gateway@sha256:b3cb6ff8be5b0d760b6b527ca267c90d1596eaa499a4c16ee147725943c8f21d",
     "postgres": "postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685",
     "redis": "redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2",
-    "yugabyte": "yugabytedb/yugabyte@sha256:3f9cd1b8f520cc78e82ace51174be73343a551148bc6c9a9f821a22f1d2858c5",
+    "yugabyte": "yugabytedb/yugabyte@sha256:e69ddcd248db7ee5c097d8c955d3657cf7fd9c21743a4589281767487ab5832b",
     "localstack": "localstack/localstack@sha256:fc9a03f14f4668f5d874eadb77e5da5461ce735e2ce86b77b0056606c0677dba",
     "kafka": "apache/kafka@sha256:c9aea96a4813e77e703541b1d8f7d58c9ee05b77353da33684db55c840548791",
     "schemaRegistry": "confluentinc/cp-schema-registry@sha256:b0f1473e9b724ada5338390346438229206f3568ccee94d78bdff1f37e3c8c52",
