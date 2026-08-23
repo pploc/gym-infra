@@ -62,6 +62,8 @@ cp "$out/identifier.crt" "$out/identifier.key" "$out/runtime/identifier/"
 
 find "$out" -type f -name '*.crt' -exec chmod 644 {} +
 find "$out" -type f -name '*.key' -exec chmod 600 {} +
+# Containers run as distinct non-root users; private fixture mounts remain key-only readable.
+find "$out/runtime" -type f -name '*.key' -exec chmod 644 {} +
 
 # Root private keys stay mode 0600 for renderer and negative tests; fixture cleanup removes them.
 rm -f "$out/g10-ca.key" "$out/g10-wrong-ca.key"

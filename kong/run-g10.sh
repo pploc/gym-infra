@@ -9,39 +9,46 @@ paths=$(mktemp "${TMPDIR:-/tmp}/gym-g10-paths.XXXXXX")
 # materialize-g10.py creates absent workspace with mode 0700.
 
 compose=""
+compose_ready=0
 raw=""
 safe=""
 fixture=""
 rendered=""
 certs=""
 diagnostics=$root/g10-last-run.log
-rm -f "$diagnostics" "$root/g10-raw-evidence.yaml" "$root/g10-rendered-kong.yml"
+final_safe=$root/g10-sanitized-evidence.yaml
+rm -f "$diagnostics" "$root/g10-raw-evidence.yaml" "$final_safe" "$root/g10-rendered-kong.yml"
 
 
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required for locked source materialization}"
 
 cleanup() {
   result=$?
-  [ -z "$compose" ] || $compose down --remove-orphans >/dev/null 2>&1 || true
+  [ "$compose_ready" -ne 1 ] || $compose down --remove-orphans >/dev/null 2>&1 || true
   rm -f "$paths" "$safe"
   rm -rf "$workspace_parent" "$certs"
   exit "$result"
+}
+phase() {
+  printf '%s\n' "G10 phase: $1"
 }
 failed() {
   printf '%s\n' 'G10 locked E2E failed.' >&2
   {
     printf '%s\n' 'G10 locked E2E failed.'
-    [ -z "$compose" ] || $compose ps || true
-    [ -z "$compose" ] || $compose logs --no-color --tail=200 plans-migrate member-migrate identifier-migrate checkin-migrate kms-init kafka schema-registry ms-gym-plans ms-gym-member ms-gym-identifier ms-gym-checkin ms-gym-api-gateway kong || true
+    [ "$compose_ready" -ne 1 ] || $compose ps || true
+    [ "$compose_ready" -ne 1 ] || $compose logs --no-color --tail=200 identifier-migrate checkin-migrate kms-init topic-seed schema-java-generate schema-seed kafka schema-registry ms-gym-plans ms-gym-member ms-gym-identifier ms-gym-checkin checkin-readiness ms-gym-api-gateway gateway-readiness kong || true
   } >"$diagnostics"
-  [ -z "$compose" ] || $compose ps >&2 || true
-  [ -z "$compose" ] || $compose logs --no-color --tail=200 plans-migrate member-migrate identifier-migrate checkin-migrate kms-init kafka schema-registry ms-gym-plans ms-gym-member ms-gym-identifier ms-gym-checkin ms-gym-api-gateway kong >&2 || true
+  [ "$compose_ready" -ne 1 ] || $compose ps >&2 || true
+  [ "$compose_ready" -ne 1 ] || $compose logs --no-color --tail=200 identifier-migrate checkin-migrate kms-init topic-seed schema-java-generate schema-seed kafka schema-registry ms-gym-plans ms-gym-member ms-gym-identifier ms-gym-checkin checkin-readiness ms-gym-api-gateway gateway-readiness kong >&2 || true
   exit 1
 }
 trap cleanup EXIT INT TERM
 
+phase lock-validation
 python3 "$root/validate-g10-lock.py" "$lock"
-python3 "$root/materialize-g10.py" --lock "$lock" --workspace "$workspace" >"$paths" || failed
+phase source-materialization
+timeout 180 python3 "$root/materialize-g10.py" --lock "$lock" --workspace "$workspace" >"$paths" || failed
 . "$paths"
 export G10_PROTO_ROOT
 fixture=$G10_INFRA_ROOT/kong
@@ -51,8 +58,10 @@ compose="docker compose -f $fixture/g10-compose.yml"
 raw=$fixture/g10-raw-evidence.yaml
 safe=$fixture/g10-sanitized-evidence.yaml
 certs=$fixture/g10-certs
+rm -f "$final_safe"
 rendered=$fixture/g10-rendered-kong.yml
 
+phase source-verification
 python3 - "$lock" "$G10_INFRA_ROOT" "$fixture" <<'PY'
 import hashlib, json, os, subprocess, sys
 from pathlib import Path
@@ -72,8 +81,11 @@ for name, path in checks.items():
         raise SystemExit(f"{name} checksum mismatch")
 PY
 
+phase certificate-generation
 "$fixture/generate-g10-certs.sh" "$certs"
-find "$certs" -type f -name '*.key' -perm /0077 -print -quit | grep -q . && failed || true
+find "$certs" -path "$certs/runtime" -prune -o -type f -name '*.key' -perm /0077 -print -quit | grep -q . && failed || true
+find "$certs/runtime" -type f -name '*.key' ! -perm -0004 -print -quit | grep -q . && failed || true
+phase kong-rendering
 python3 "$fixture/render-g10-config.py" \
   --manifest "$G10_PROTO_ROOT/contracts/v1/http/active-operations.yaml" \
   --template "$fixture/g10-kong-template.yml" \
@@ -98,20 +110,30 @@ print(f"export G10_IDENTIFIER_IMAGE={shlex.quote(images['identifier'])}")
 print(f"export G10_MEMBER_IMAGE={shlex.quote(images['member'])}")
 print(f"export G10_PLANS_IMAGE={shlex.quote(images['plans'])}")
 print(f"export G10_CHECKIN_IMAGE={shlex.quote(images['checkin'])}")
+print(f"export G10_BUF_IMAGE={shlex.quote(images['buf'])}")
+print(f"export G10_SCHEMA_SEED_IMAGE={shlex.quote(images['schemaSeed'])}")
 PY
 )"
 export G10_CHECKIN_DATABASE_URL='postgres://yugabyte@yugabyte:5433/checkin_db?sslmode=disable'
+phase compose-validation
 $compose config --quiet || failed
-$compose up -d || failed
+compose_ready=1
+phase compose-startup
+timeout 600 $compose up -d || failed
 
+phase runtime-readiness
 for _ in $(seq 1 300); do
   if $compose ps --status running --services | grep -qx kong \
       && $compose ps --status running --services | grep -qx ms-gym-api-gateway \
       && $compose ps --status running --services | grep -qx ms-gym-checkin; then
-    if curl --cacert "$certs/g10-ca.crt" -sS -o /dev/null \
+    if $compose exec -T kong kong health >/dev/null 2>&1 \
+        && curl --cacert "$certs/g10-ca.crt" -sS -o /dev/null \
         -w '%{http_code}' https://localhost:8443/status | grep -qx 404; then
+      phase business-validation
       "$fixture/g10-business-check.sh" >"$raw" || failed
+      phase evidence-sanitization
       python3 "$fixture/sanitize-g10-evidence.py" "$raw" "$safe" || failed
+      cp "$safe" "$final_safe"
       printf '%s\n' 'G10 locked E2E and sanitized evidence passed.'
       exit 0
     fi

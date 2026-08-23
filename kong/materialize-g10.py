@@ -33,9 +33,11 @@ def git_environment() -> dict[str, str]:
     env = os.environ.copy()
     env.update({
         "GIT_TERMINAL_PROMPT": "0",
-        "GIT_CONFIG_COUNT": "1",
-        "GIT_CONFIG_KEY_0": "url.https://x-access-token:" + token + "@github.com/.insteadOf",
-        "GIT_CONFIG_VALUE_0": "https://github.com/",
+        "GIT_CONFIG_COUNT": "2",
+        "GIT_CONFIG_KEY_0": "core.autocrlf",
+        "GIT_CONFIG_VALUE_0": "false",
+        "GIT_CONFIG_KEY_1": "url.https://x-access-token:" + token + "@github.com/.insteadOf",
+        "GIT_CONFIG_VALUE_1": "https://github.com/",
     })
     return env
 

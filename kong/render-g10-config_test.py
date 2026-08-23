@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import os
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).parent
+PROTO_ROOT = Path(os.environ.get("G10_PROTO_ROOT", ROOT / "../../gym-proto"))
 SPEC = importlib.util.spec_from_file_location("render_g10_config", ROOT / "render-g10-config.py")
 RENDER = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -15,7 +17,7 @@ SPEC.loader.exec_module(RENDER)
 
 class RenderG10ConfigTest(unittest.TestCase):
     def setUp(self):
-        self.manifest = yaml.safe_load((ROOT / "../../gym-proto/contracts/v1/http/active-operations.yaml").read_text())
+        self.manifest = yaml.safe_load((PROTO_ROOT / "contracts/v1/http/active-operations.yaml").read_text())
 
     def test_given_released_manifest_when_validated_then_has_exact_checkin_routes(self):
         # given / when

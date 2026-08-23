@@ -12,7 +12,7 @@ GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 DIGEST_IMAGE = re.compile(r"^[a-z0-9./_-]+(?:[:][a-z0-9._-]+)?@sha256:[0-9a-f]{64}$")
 REPOSITORY_NAMES = {"gymProto", "identifier", "member", "plans", "checkin", "infrastructure"}
-IMAGE_NAMES = {"identifier", "member", "plans", "checkin", "gateway", "postgres", "redis", "yugabyte", "localstack", "kafka", "schemaRegistry", "kong"}
+IMAGE_NAMES = {"identifier", "member", "plans", "checkin", "gateway", "postgres", "redis", "yugabyte", "localstack", "kafka", "schemaRegistry", "kong", "buf", "schemaSeed"}
 CHECKSUM_NAMES = {"compose", "certGenerator", "gatewayGoMod", "gatewayGoSum", "migration"}
 ROUTES = {"count": 33, "byOwner": {"identity": 12, "member": 7, "plans": 8, "checkin": 6}}
 
@@ -24,8 +24,9 @@ def _mapping(value: object, message: str) -> dict:
 
 
 def given_final_g10_lock_when_validated_then_require_immutable_inputs(lock: dict) -> None:
-    if lock.get("lockVersion") != 2 or lock.get("status") != "final-technical-gates-pending":
-        raise ValueError("G10 lock must be final technical-gates-pending")
+    status = lock.get("status")
+    if lock.get("lockVersion") != 2 or status not in {"final-technical-gates-pending", "complete"}:
+        raise ValueError("G10 lock status is invalid")
 
     proto = _mapping(lock.get("gymProto"), "gymProto metadata is invalid")
     repositories = _mapping(lock.get("repositories"), "G10 repositories are invalid")
@@ -73,8 +74,12 @@ def given_final_g10_lock_when_validated_then_require_immutable_inputs(lock: dict
     if not isinstance(runs, list) or not runs or any(not isinstance(url, str) or not url.startswith("https://github.com/") for url in runs):
         raise ValueError("protected G10 run URLs are invalid")
     finalization = lock.get("requiredFinalization")
-    if not isinstance(finalization, list) or not finalization:
+    if not isinstance(finalization, list):
+        raise ValueError("G10 finalization requirements are invalid")
+    if status == "final-technical-gates-pending" and not finalization:
         raise ValueError("G10 finalization requirements are missing")
+    if status == "complete" and finalization:
+        raise ValueError("complete G10 lock must clear finalization requirements")
 
 
 def main() -> int:
