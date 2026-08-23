@@ -169,7 +169,7 @@ if [ "$skip_fixture" != 1 ]; then
   [ -n "$qr" ]
 
   # No ACTIVE subscription yet: scan must fail closed.
-  expect_status 409 scan-inactive POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-inactive-$user_id\"}"
+  expect_status 400 scan-inactive POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-inactive-$user_id\"}"
   add_check checkin_scan_membership_inactive passed 0
   printf '%s\n' 'checkin_scan_membership_inactive passed' >&2
 
