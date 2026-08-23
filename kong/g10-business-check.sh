@@ -13,7 +13,7 @@ run_case() {
   name=$1 expected=$2 method=$3 path=$4
   actual=$(curl --cacert "$ca" -sS -o /dev/null -w '%{http_code}' -X "$method" "$base$path" || true)
   [ "$actual" = "$expected" ] || status=1
-  printf '%s\t%s\t%s\n' "$name" "$actual" "$([ "$actual" = "$expected" ] && printf passed || printf failed)"
+  printf '%s\t%s\t%s\n' "$name" "$actual" "$([ "$actual" = "$expected" ] && printf passed || printf failed)" >&2
 }
 
 run_case health 404 GET /status
@@ -44,4 +44,4 @@ Path(sys.argv[3]).write_text(__import__('yaml').safe_dump(evidence, sort_keys=Fa
 if status:
     raise SystemExit(status)
 PY
-printf '%s\n' 'G10 business negative matrix passed.'
+printf '%s\n' 'G10 business negative matrix passed.' >&2
