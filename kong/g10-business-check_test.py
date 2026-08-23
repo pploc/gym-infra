@@ -20,7 +20,7 @@ class G10BusinessCheckTest(unittest.TestCase):
             curl.write_text(
                 "#!/bin/sh\n"
                 "case \"$*\" in\n"
-                "  */api/v1/users/me|*/api/v1/check-ins/me|*check-in-qr*) printf '%s\\n' 401 ;;\n"
+                "  */api/v1/users/me|*/api/v1/check-ins/me|*check-in-qr*|*/api/v1/check-ins:scan) printf '%s\\n' 401 ;;\n"
                 "  *) printf '%s\\n' 404 ;;\n"
                 "esac\n"
             )

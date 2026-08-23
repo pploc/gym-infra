@@ -110,6 +110,7 @@ run_case unknown_route 404 GET /api/v1/not-a-route
 run_case missing_jwt_identity 401 GET /api/v1/users/me
 run_case missing_jwt_checkins_me 401 GET /api/v1/check-ins/me
 run_case missing_jwt_display_qr 401 GET /api/v1/gyms/00000000-0000-0000-0000-000000000001/check-in-qr
+run_case missing_jwt_scan 401 POST /api/v1/check-ins:scan
 run_case direct_grpc_path 404 POST /checkin.v1.CheckInService/ProcessScan
 run_case trailing_slash 404 GET /api/v1/users/me/
 if [ "$status" -eq 0 ]; then
@@ -195,6 +196,33 @@ if [ "$skip_fixture" != 1 ]; then
   body history-after | assert_json 'obj["total"] == 1 and len(obj["records"]) == 1 and obj["records"][0]["id"] == args[0]' "$record_id"
   add_check checkin_my_history_after_scan passed 0
   printf '%s\n' 'checkin_my_history_after_scan passed' >&2
+
+  expect_status 403 scan-admin-forbidden POST /api/v1/check-ins:scan "$admin" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-admin-scan-$user_id\"}"
+  add_check checkin_scan_admin_forbidden passed 0
+  printf '%s\n' 'checkin_scan_admin_forbidden passed' >&2
+
+  expect_status 400 scan-invalid-qr POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"not-a-signed-qr\",\"idempotencyKey\":\"g10-invalid-qr-$user_id\"}"
+  add_check checkin_scan_invalid_qr passed 0
+  printf '%s\n' 'checkin_scan_invalid_qr passed' >&2
+
+  day=$(date -u +%F)
+  expect_status 403 daily-count-customer GET "/api/v1/gyms/$gym_id/check-ins:daily-count?date=$day" "$customer"
+  add_check checkin_daily_count_customer_forbidden passed 0
+  printf '%s\n' 'checkin_daily_count_customer_forbidden passed' >&2
+
+  expect_status 200 daily-count GET "/api/v1/gyms/$gym_id/check-ins:daily-count?date=$day" "$admin"
+  body daily-count | assert_json 'obj["gymId"] == args[0] and obj["date"] == args[1] and obj["count"] == 1' "$gym_id" "$day"
+  add_check checkin_daily_count_positive passed 0
+  printf '%s\n' 'checkin_daily_count_positive passed' >&2
+
+  expect_status 200 member-history GET "/api/v1/members/$member_id/check-ins" "$admin"
+  body member-history | assert_json 'obj["total"] == 1 and len(obj["records"]) == 1 and obj["records"][0]["id"] == args[0]' "$record_id"
+  add_check checkin_member_history_positive passed 0
+  printf '%s\n' 'checkin_member_history_positive passed' >&2
+
+  expect_status 403 member-history-customer GET "/api/v1/members/$member_id/check-ins" "$customer"
+  add_check checkin_member_history_customer_forbidden passed 0
+  printf '%s\n' 'checkin_member_history_customer_forbidden passed' >&2
 fi
 
 python3 - "$lock" "$status" "$checks" <<'PY'
