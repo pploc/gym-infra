@@ -216,6 +216,26 @@ if [ "$skip_fixture" != 1 ]; then
   add_check checkin_outbox_idempotent_single_publish passed 0
   printf '%s\n' 'checkin_outbox_idempotent_single_publish passed' >&2
 
+  expect_status 200 scan-distinct POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-scan-distinct-$user_id\"}"
+  body scan-distinct | assert_json 'obj["success"] and obj["record"]["id"] != args[0] and obj["record"]["gymId"] == args[1] and obj["record"]["memberId"] == args[2]' "$record_id" "$gym_id" "$member_id"
+  record_id_2=$(body scan-distinct | json_field record.id)
+  for _ in $(seq 1 120); do
+    published_count=$(sql_checkin "SELECT count(*) FROM outbox_events WHERE topic = 'checkin.recorded.v1' AND message_key = '$member_id' AND status = 'PUBLISHED'" | tr -d '[:space:]')
+    [ "$published_count" = 2 ] && break
+    sleep 1
+  done
+  [ "$published_count" = 2 ] || {
+    printf '%s\n' 'Timed out waiting for distinct-key checkin.recorded.v1 outbox publication.' >&2
+    exit 1
+  }
+  add_check checkin_scan_distinct_key_positive passed 0
+  printf '%s\n' 'checkin_scan_distinct_key_positive passed' >&2
+
+  expect_status 200 history-after-distinct GET /api/v1/check-ins/me "$customer"
+  body history-after-distinct | assert_json 'obj["total"] == 2 and len(obj["records"]) == 2 and any(r["id"] == args[0] for r in obj["records"]) and any(r["id"] == args[1] for r in obj["records"])' "$record_id" "$record_id_2"
+  add_check checkin_my_history_after_distinct_scan passed 0
+  printf '%s\n' 'checkin_my_history_after_distinct_scan passed' >&2
+
   expect_status 403 scan-admin-forbidden POST /api/v1/check-ins:scan "$admin" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-admin-scan-$user_id\"}"
   add_check checkin_scan_admin_forbidden passed 0
   printf '%s\n' 'checkin_scan_admin_forbidden passed' >&2
@@ -230,18 +250,41 @@ if [ "$skip_fixture" != 1 ]; then
   printf '%s\n' 'checkin_daily_count_customer_forbidden passed' >&2
 
   expect_status 200 daily-count GET "/api/v1/gyms/$gym_id/check-ins:daily-count?date=$day" "$admin"
-  body daily-count | assert_json 'obj["gymId"] == args[0] and obj["date"] == args[1] and obj["count"] == 1' "$gym_id" "$day"
+  body daily-count | assert_json 'obj["gymId"] == args[0] and obj["date"] == args[1] and obj["count"] == 2' "$gym_id" "$day"
   add_check checkin_daily_count_positive passed 0
   printf '%s\n' 'checkin_daily_count_positive passed' >&2
 
   expect_status 200 member-history GET "/api/v1/members/$member_id/check-ins" "$admin"
-  body member-history | assert_json 'obj["total"] == 1 and len(obj["records"]) == 1 and obj["records"][0]["id"] == args[0]' "$record_id"
+  body member-history | assert_json 'obj["total"] == 2 and len(obj["records"]) == 2 and any(r["id"] == args[0] for r in obj["records"]) and any(r["id"] == args[1] for r in obj["records"])' "$record_id" "$record_id_2"
   add_check checkin_member_history_positive passed 0
   printf '%s\n' 'checkin_member_history_positive passed' >&2
 
   expect_status 403 member-history-customer GET "/api/v1/members/$member_id/check-ins" "$customer"
   add_check checkin_member_history_customer_forbidden passed 0
   printf '%s\n' 'checkin_member_history_customer_forbidden passed' >&2
+
+  expect_status 403 rotate-customer-forbidden POST "/api/v1/gyms/$gym_id/check-in-qr:rotate" "$customer" '{"emergency":false}'
+  add_check checkin_rotate_customer_forbidden passed 0
+  printf '%s\n' 'checkin_rotate_customer_forbidden passed' >&2
+
+  expect_status 200 rotate-normal POST "/api/v1/gyms/$gym_id/check-in-qr:rotate" "$admin" '{"emergency":false}'
+  body rotate-normal | assert_json 'obj["gymId"] == args[0] and int(obj["keyVersion"]) >= 2 and isinstance(obj["activatedAt"], str) and len(obj["activatedAt"]) > 0' "$gym_id"
+  add_check checkin_rotate_normal_positive passed 0
+  printf '%s\n' 'checkin_rotate_normal_positive passed' >&2
+
+  expect_status 200 display-qr-after-rotate GET "/api/v1/gyms/$gym_id/check-in-qr" "$admin"
+  body display-qr-after-rotate | assert_json 'obj["gymId"] == args[0] and isinstance(obj["current"]["qrPayload"], str) and len(obj["current"]["qrPayload"]) > 0' "$gym_id"
+  qr_rotated=$(body display-qr-after-rotate | json_field current.qrPayload)
+  [ -n "$qr_rotated" ]
+  expect_status 200 scan-after-rotate POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr_rotated\",\"idempotencyKey\":\"g10-scan-after-rotate-$user_id\"}"
+  body scan-after-rotate | assert_json 'obj["success"] and obj["record"]["gymId"] == args[0] and obj["record"]["memberId"] == args[1]' "$gym_id" "$member_id"
+  add_check checkin_scan_after_normal_rotate passed 0
+  printf '%s\n' 'checkin_scan_after_normal_rotate passed' >&2
+
+  expect_status 200 rotate-emergency POST "/api/v1/gyms/$gym_id/check-in-qr:rotate" "$admin" '{"emergency":true}'
+  body rotate-emergency | assert_json 'obj["gymId"] == args[0] and int(obj["keyVersion"]) >= 3' "$gym_id"
+  add_check checkin_rotate_emergency_positive passed 0
+  printf '%s\n' 'checkin_rotate_emergency_positive passed' >&2
 fi
 
 python3 - "$lock" "$status" "$checks" <<'PY'
