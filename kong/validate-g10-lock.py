@@ -12,7 +12,7 @@ GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 DIGEST_IMAGE = re.compile(r"^[a-z0-9./_-]+(?:[:][a-z0-9._-]+)?@sha256:[0-9a-f]{64}$")
 REPOSITORY_NAMES = {"gymProto", "identifier", "member", "plans", "checkin", "infrastructure"}
-IMAGE_NAMES = {"identifier", "member", "plans", "checkin", "gateway", "postgres", "redis", "yugabyte", "localstack", "kafka", "schemaRegistry", "kong"}
+IMAGE_NAMES = {"identifier", "member", "plans", "checkin", "gateway", "postgres", "redis", "yugabyte", "localstack", "kafka", "schemaRegistry", "kong", "buf", "schemaSeed"}
 CHECKSUM_NAMES = {"compose", "certGenerator", "gatewayGoMod", "gatewayGoSum", "migration"}
 ROUTES = {"count": 33, "byOwner": {"identity": 12, "member": 7, "plans": 8, "checkin": 6}}
 

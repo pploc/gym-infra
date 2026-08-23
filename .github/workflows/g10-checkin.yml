@@ -12,6 +12,7 @@ on:
       - kong/render-g10-config_test.py
       - kong/g10-kong-template.yml
       - kong/g10-compose.yml
+      - kong/g10-java.buf.gen.yaml
       - kong/generate-g10-certs.sh
       - kong/g10-business-check.sh
       - kong/run-g10.sh
@@ -26,7 +27,7 @@ jobs:
   g10:
     name: G10 locked fixture gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: read

@@ -66,7 +66,7 @@ services:
     image: ${G10_SCHEMA_REGISTRY_IMAGE:?G10_SCHEMA_REGISTRY_IMAGE is required}
     depends_on:
       kafka:
-        condition: service_started
+        condition: service_healthy
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
@@ -76,6 +76,58 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
+
+  topic-seed:
+    image: ${G10_KAFKA_IMAGE:?G10_KAFKA_IMAGE is required}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: >-
+      sh -ec 'for topic in
+      identity.user.registered.v1 identity.user.suspended.v1 identity.user.role-changed.v1
+      identity.email.verification-requested.v1 payment.completed.v1
+      membership.activated.v1 membership.paused.v1 membership.resumed.v1
+      membership.expiring-soon.v1 membership.expired.v1 checkin.recorded.v1; do
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists
+      --topic "$$topic" --partitions 1 --replication-factor 1;
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists
+      --topic "$$topic.DLQ" --partitions 1 --replication-factor 1;
+      done'
+
+  schema-java-generate:
+    image: ${G10_BUF_IMAGE:?G10_BUF_IMAGE is required}
+    environment:
+      HOME: /tmp
+    volumes:
+      - ${G10_PROTO_ROOT:?G10_PROTO_ROOT is required}:/source:ro
+      - g10-proto-build:/work
+      - ./g10-java.buf.gen.yaml:/template/buf.gen.yaml:ro
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        find /work -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+        cp -a /source/. /work/
+        sed -i 's/\r$//' /work/gradlew
+        cd /work
+        exec buf generate --template /template/buf.gen.yaml
+
+  schema-seed:
+    image: ${G10_SCHEMA_SEED_IMAGE:?G10_SCHEMA_SEED_IMAGE is required}
+    depends_on:
+      topic-seed:
+        condition: service_completed_successfully
+      schema-registry:
+        condition: service_healthy
+      schema-java-generate:
+        condition: service_completed_successfully
+    working_dir: /work
+    environment:
+      GRADLE_USER_HOME: /tmp/gradle
+    volumes:
+      - g10-proto-build:/source:ro
+    command: >-
+      sh -ec 'work=$$(mktemp -d) && cp -a /source/. "$$work/" && cd "$$work" &&
+      exec ./gradlew seedConfluentSchemas -PschemaRegistryUrl=http://schema-registry:8081 --no-daemon'
 
   checkin-migrate:
     image: ${G10_YUGABYTE_IMAGE:?G10_YUGABYTE_IMAGE is required}
@@ -146,6 +198,14 @@ services:
     depends_on:
       identifier-migrate:
         condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      topic-seed:
+        condition: service_completed_successfully
+      schema-seed:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       ms-gym-plans:
@@ -195,6 +255,14 @@ services:
     depends_on:
       member-postgres:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      topic-seed:
+        condition: service_completed_successfully
+      schema-seed:
+        condition: service_completed_successfully
       ms-gym-plans:
         condition: service_healthy
     environment:
@@ -232,6 +300,10 @@ services:
         condition: service_healthy
       schema-registry:
         condition: service_healthy
+      topic-seed:
+        condition: service_completed_successfully
+      schema-seed:
+        condition: service_completed_successfully
       ms-gym-member:
         condition: service_healthy
       ms-gym-plans:
@@ -261,15 +333,29 @@ services:
     volumes:
       - ./g10-certs/runtime/checkin:/run/mtls:ro
 
+  checkin-readiness:
+    image: ${G10_LOCALSTACK_IMAGE:?G10_LOCALSTACK_IMAGE is required}
+    network_mode: service:ms-gym-checkin
+    depends_on:
+      ms-gym-checkin:
+        condition: service_started
+    entrypoint: ["sh", "-ec"]
+    command: ["while :; do sleep 3600; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1:8080/readyz >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   ms-gym-api-gateway:
     image: ${G10_GATEWAY_IMAGE:?G10_GATEWAY_IMAGE is required}
     depends_on:
       ms-gym-member:
-        condition: service_started
+        condition: service_healthy
       ms-gym-plans:
-        condition: service_started
-      ms-gym-checkin:
-        condition: service_started
+        condition: service_healthy
+      checkin-readiness:
+        condition: service_healthy
     environment:
       HTTPS_ADDR: ":8443"
       TLS_SERVER_CERT: /run/mtls/ms-gym-api-gateway-server.crt
@@ -286,13 +372,34 @@ services:
     volumes:
       - ./g10-certs/runtime/gateway:/run/mtls:ro
 
+  gateway-readiness:
+    image: ${G10_LOCALSTACK_IMAGE:?G10_LOCALSTACK_IMAGE is required}
+    network_mode: service:ms-gym-api-gateway
+    depends_on:
+      ms-gym-api-gateway:
+        condition: service_started
+    entrypoint: ["sh", "-ec"]
+    command: ["while :; do sleep 3600; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --noproxy '*' --silent --show-error --connect-timeout 1 --max-time 2 telnet://127.0.0.1:8443 </dev/null >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   kong:
     image: ${G10_KONG_IMAGE:?G10_KONG_IMAGE is required}
     depends_on:
+      redis:
+        condition: service_healthy
       ms-gym-identifier:
-        condition: service_started
-      ms-gym-api-gateway:
-        condition: service_started
+        condition: service_healthy
+      gateway-readiness:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kong health || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
@@ -307,6 +414,11 @@ services:
       - ./g10-certs/runtime/kong:/run/mtls:ro
       - ./plugins/gym-jwt-claims:/opt/kong/plugins/gym-jwt-claims:ro
     ports: ["8443:8443"]
+
+volumes:
+  g10-proto-build:
+    name: gym-g10-proto-build
+    driver: local
 
 secrets:
   github_token:
