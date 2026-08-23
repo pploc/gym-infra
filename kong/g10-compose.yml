@@ -38,7 +38,7 @@ services:
         --endpoint-url=http://localstack:4566 kms create-key --description 'ms-gym-checkin
         G10 QR root key' --query KeyMetadata.KeyId --output text); aws
         --endpoint-url=http://localstack:4566 kms create-alias --alias-name
-        alias/ms-gym-checkin-qr-root --target-key-id \"$$key_id\"; }
+        alias/ms-gym-checkin-qr-root --target-key-id "$$key_id"; }
 
   kafka:
     image: ${G10_KAFKA_IMAGE:?G10_KAFKA_IMAGE is required}
