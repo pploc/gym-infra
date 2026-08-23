@@ -52,7 +52,7 @@
     "member": "ghcr.io/pploc/ms-gym-member@sha256:cfa7e4cceaa1cb0fcda7b3c0b11aaaa399c7bb92584a679a0e105bb4657decbc",
     "plans": "ghcr.io/pploc/ms-gym-plans@sha256:5de9615e8f95685833677311150f8d37cd1c308b499720c58869261cdbcc77f1",
     "checkin": "ghcr.io/pploc/ms-gym-checkin@sha256:6fbaf44bc9604e580341cf18b6388bcc913886cf6305fb2f0c13a4dad21b8efe",
-    "gateway": "ghcr.io/pploc/ms-gym-api-gateway@sha256:b3cb6ff8be5b0d760b6b527ca267c90d1596eaa499a4c16ee147725943c8f21d",
+    "gateway": "ghcr.io/pploc/ms-gym-api-gateway@sha256:eae747494b85f5de9ba4a915209625999be09dae7ed45cfc898999644fa6b9f2",
     "postgres": "postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685",
     "redis": "redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2",
     "yugabyte": "yugabytedb/yugabyte@sha256:e69ddcd248db7ee5c097d8c955d3657cf7fd9c21743a4589281767487ab5832b",
