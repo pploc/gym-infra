@@ -381,7 +381,7 @@ services:
     entrypoint: ["sh", "-ec"]
     command: ["while :; do sleep 3600; done"]
     healthcheck:
-      test: ["CMD-SHELL", "curl --noproxy '*' --silent --show-error --connect-timeout 1 --max-time 2 telnet://127.0.0.1:8443 </dev/null >/dev/null"]
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.create_connection(('127.0.0.1',8443),1); s.close()\""]
       interval: 2s
       timeout: 3s
       retries: 30
