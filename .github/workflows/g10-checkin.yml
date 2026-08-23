@@ -2,6 +2,23 @@ name: G10 Check-in Fixture
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [develop]
+    paths:
+      - kong/g10-release-lock.json
+      - kong/validate-g10-lock.py
+      - kong/validate-g10-lock_test.py
+      - kong/render-g10-config.py
+      - kong/render-g10-config_test.py
+      - kong/g10-kong-template.yml
+      - kong/g10-compose.yml
+      - kong/g10-java.buf.gen.yaml
+      - kong/generate-g10-certs.sh
+      - kong/g10-business-check.sh
+      - kong/run-g10.sh
+      - kong/generated-gateway/**
+      - helm/gym-service/**
+      - .github/workflows/g10-checkin.yml
   push:
     branches: [develop]
     paths:
@@ -18,6 +35,7 @@ on:
       - kong/run-g10.sh
       - kong/generated-gateway/**
       - helm/gym-service/**
+      - .github/workflows/g10-checkin.yml
 
 permissions:
   contents: read

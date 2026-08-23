@@ -45,6 +45,20 @@ class ValidateG10LockTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "repository set"):
             VALIDATE.given_final_g10_lock_when_validated_then_require_immutable_inputs(lock)
 
+    def test_given_pending_lock_without_finalization_when_validated_then_reject(self):
+        lock = deepcopy(self.lock)
+        lock["status"] = "final-technical-gates-pending"
+        lock["requiredFinalization"] = []
+        with self.assertRaisesRegex(ValueError, "finalization requirements are missing"):
+            VALIDATE.given_final_g10_lock_when_validated_then_require_immutable_inputs(lock)
+
+    def test_given_complete_lock_with_finalization_when_validated_then_reject(self):
+        lock = deepcopy(self.lock)
+        lock["status"] = "complete"
+        lock["requiredFinalization"] = ["owner acceptance"]
+        with self.assertRaisesRegex(ValueError, "clear finalization"):
+            VALIDATE.given_final_g10_lock_when_validated_then_require_immutable_inputs(lock)
+
 
 if __name__ == "__main__":
     unittest.main()

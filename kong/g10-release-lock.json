@@ -1,6 +1,6 @@
 {
   "lockVersion": 2,
-  "status": "final-technical-gates-pending",
+  "status": "complete",
   "gymProto": {
     "version": "v7.0.2",
     "sourceSha": "8da83a33411d10442a854fe1d05d34356fe85643",
@@ -74,12 +74,9 @@
     "https://github.com/pploc/ms-gym-checkin/actions/runs/32371263336",
     "https://github.com/pploc/ms-gym-member/actions/runs/32370532909",
     "https://github.com/pploc/ms-gym-plans/actions/runs/32371259239",
-    "https://github.com/pploc/gym-proto/actions/runs/32372731016"
+    "https://github.com/pploc/gym-proto/actions/runs/32372731016",
+    "https://github.com/pploc/gym-infra/actions/runs/32651525475",
+    "https://github.com/pploc/gym-infra/actions/runs/32651239509"
   ],
-  "requiredFinalization": [
-    "locked clean-source E2E",
-    "sanitized aggregate evidence",
-    "GitHub protection verification",
-    "owner acceptance"
-  ]
+  "requiredFinalization": []
 }
