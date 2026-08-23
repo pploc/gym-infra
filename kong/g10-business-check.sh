@@ -77,6 +77,7 @@ expect_status() {
 body() { cat "$private/$1.body"; }
 
 sql_identity() { $compose exec -T identity-postgres psql -U postgres -d identity_db -tA -c "$1"; }
+sql_member() { $compose exec -T member-postgres psql -U postgres -d gym_member -tA -c "$1"; }
 
 wait_for() {
   name=$1 command=$2
@@ -161,6 +162,39 @@ if [ "$skip_fixture" != 1 ]; then
   expect_status 403 display-qr-customer GET "/api/v1/gyms/$gym_id/check-in-qr" "$customer"
   add_check checkin_display_qr_customer_forbidden passed 0
   printf '%s\n' 'checkin_display_qr_customer_forbidden passed' >&2
+
+  qr=$(body display-qr | json_field current.qrPayload)
+  member_id=$(sql_member "SELECT id FROM members WHERE user_id='$user_id'")
+  [ -n "$member_id" ]
+  [ -n "$qr" ]
+
+  # No ACTIVE subscription yet: scan must fail closed.
+  expect_status 409 scan-inactive POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-inactive-$user_id\"}"
+  add_check checkin_scan_membership_inactive passed 0
+  printf '%s\n' 'checkin_scan_membership_inactive passed' >&2
+
+  sql_member "INSERT INTO subscriptions (id, member_id, gym_id, plan_id, plan_type_snapshot, duration_days_snapshot, price_vnd_snapshot, status, start_date, end_date, pause_count) VALUES (gen_random_uuid()::text, '$member_id', '$gym_id', 'plan-g10-fixture', 'MONTHLY', 30, 450000, 'ACTIVE', CURRENT_DATE, CURRENT_DATE + 30, 0)" >/dev/null
+  wait_for 'ACTIVE subscription' "$compose exec -T member-postgres psql -U postgres -d gym_member -tAc \"SELECT status FROM subscriptions WHERE member_id='$member_id' AND gym_id='$gym_id'\" | grep -qx ACTIVE"
+
+  expect_status 200 scan-positive POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-scan-$user_id\"}"
+  body scan-positive | assert_json 'obj["success"] is True and obj["record"]["gymId"] == args[0] and obj["record"]["memberId"] == args[1] and isinstance(obj["record"]["id"], str) and len(obj["record"]["id"]) > 0' "$gym_id" "$member_id"
+  record_id=$(body scan-positive | json_field record.id)
+  add_check checkin_scan_positive passed 0
+  printf '%s\n' 'checkin_scan_positive passed' >&2
+
+  expect_status 200 scan-replay POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-scan-$user_id\"}"
+  body scan-replay | assert_json 'obj["success"] is True and obj["record"]["id"] == args[0]' "$record_id"
+  add_check checkin_scan_idempotent_replay passed 0
+  printf '%s\n' 'checkin_scan_idempotent_replay passed' >&2
+
+  expect_status 409 scan-conflict POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr-tampered\",\"idempotencyKey\":\"g10-scan-$user_id\"}"
+  add_check checkin_scan_idempotency_conflict passed 0
+  printf '%s\n' 'checkin_scan_idempotency_conflict passed' >&2
+
+  expect_status 200 history-after GET /api/v1/check-ins/me "$customer"
+  body history-after | assert_json 'obj["total"] == 1 and len(obj["records"]) == 1 and obj["records"][0]["id"] == args[0]' "$record_id"
+  add_check checkin_my_history_after_scan passed 0
+  printf '%s\n' 'checkin_my_history_after_scan passed' >&2
 fi
 
 python3 - "$lock" "$status" "$checks" <<'PY'
