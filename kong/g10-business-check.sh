@@ -177,13 +177,13 @@ if [ "$skip_fixture" != 1 ]; then
   wait_for 'ACTIVE subscription' "$compose exec -T member-postgres psql -U postgres -d gym_member -tAc \"SELECT status FROM subscriptions WHERE member_id='$member_id' AND gym_id='$gym_id'\" | grep -qx ACTIVE"
 
   expect_status 200 scan-positive POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-scan-$user_id\"}"
-  body scan-positive | assert_json 'obj["success"] is True and obj["record"]["gymId"] == args[0] and obj["record"]["memberId"] == args[1] and isinstance(obj["record"]["id"], str) and len(obj["record"]["id"]) > 0' "$gym_id" "$member_id"
+  body scan-positive | assert_json 'obj["success"] and obj["record"]["gymId"] == args[0] and obj["record"]["memberId"] == args[1] and isinstance(obj["record"]["id"], str) and len(obj["record"]["id"]) > 0' "$gym_id" "$member_id"
   record_id=$(body scan-positive | json_field record.id)
   add_check checkin_scan_positive passed 0
   printf '%s\n' 'checkin_scan_positive passed' >&2
 
   expect_status 200 scan-replay POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-scan-$user_id\"}"
-  body scan-replay | assert_json 'obj["success"] is True and obj["record"]["id"] == args[0]' "$record_id"
+  body scan-replay | assert_json 'obj["success"] and obj["record"]["id"] == args[0]' "$record_id"
   add_check checkin_scan_idempotent_replay passed 0
   printf '%s\n' 'checkin_scan_idempotent_replay passed' >&2
 
