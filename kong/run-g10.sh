@@ -36,10 +36,10 @@ failed() {
   {
     printf '%s\n' 'G10 locked E2E failed.'
     [ "$compose_ready" -ne 1 ] || $compose ps || true
-    [ "$compose_ready" -ne 1 ] || $compose logs --no-color --tail=200 plans-migrate member-migrate identifier-migrate checkin-migrate kms-init kafka schema-registry ms-gym-plans ms-gym-member ms-gym-identifier ms-gym-checkin ms-gym-api-gateway kong || true
+    [ "$compose_ready" -ne 1 ] || $compose logs --no-color --tail=200 identifier-migrate checkin-migrate kms-init kafka schema-registry ms-gym-plans ms-gym-member ms-gym-identifier ms-gym-checkin ms-gym-api-gateway kong || true
   } >"$diagnostics"
   [ "$compose_ready" -ne 1 ] || $compose ps >&2 || true
-  [ "$compose_ready" -ne 1 ] || $compose logs --no-color --tail=200 plans-migrate member-migrate identifier-migrate checkin-migrate kms-init kafka schema-registry ms-gym-plans ms-gym-member ms-gym-identifier ms-gym-checkin ms-gym-api-gateway kong >&2 || true
+  [ "$compose_ready" -ne 1 ] || $compose logs --no-color --tail=200 identifier-migrate checkin-migrate kms-init kafka schema-registry ms-gym-plans ms-gym-member ms-gym-identifier ms-gym-checkin ms-gym-api-gateway kong >&2 || true
   exit 1
 }
 trap cleanup EXIT INT TERM

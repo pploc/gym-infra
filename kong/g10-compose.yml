@@ -161,33 +161,11 @@ services:
       timeout: 5s
       retries: 30
 
-  member-migrate:
-    image: ${G10_POSTGRES_IMAGE:?G10_POSTGRES_IMAGE is required}
-    depends_on:
-      member-postgres:
-        condition: service_healthy
-    environment:
-      PGPASSWORD: postgres
-    volumes:
-      - ${G10_MEMBER_ROOT:?G10_MEMBER_ROOT is required}/src/main/resources/db/migration:/migrations:ro
-    command: ["sh", "-ec", "for migration in /migrations/*.sql; do psql -h member-postgres -U postgres -d gym_member -f \"$$migration\"; done"]
-
-  plans-migrate:
-    image: ${G10_POSTGRES_IMAGE:?G10_POSTGRES_IMAGE is required}
-    depends_on:
-      plans-postgres:
-        condition: service_healthy
-    environment:
-      PGPASSWORD: postgres
-    volumes:
-      - ${G10_PLANS_ROOT:?G10_PLANS_ROOT is required}/src/main/resources/db/migration:/migrations:ro
-    command: ["sh", "-ec", "for migration in /migrations/*.sql; do psql -h plans-postgres -U postgres -d plans_db -f \"$$migration\"; done"]
-
   ms-gym-plans:
     image: ${G10_PLANS_IMAGE:?G10_PLANS_IMAGE is required}
     depends_on:
-      plans-migrate:
-        condition: service_completed_successfully
+      plans-postgres:
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://plans-postgres:5432/plans_db
       SPRING_DATASOURCE_USERNAME: postgres
@@ -207,8 +185,8 @@ services:
   ms-gym-member:
     image: ${G10_MEMBER_IMAGE:?G10_MEMBER_IMAGE is required}
     depends_on:
-      member-migrate:
-        condition: service_completed_successfully
+      member-postgres:
+        condition: service_healthy
       ms-gym-plans:
         condition: service_healthy
     environment:
