@@ -16,7 +16,8 @@ fixture=""
 rendered=""
 certs=""
 diagnostics=$root/g10-last-run.log
-rm -f "$diagnostics" "$root/g10-raw-evidence.yaml" "$root/g10-rendered-kong.yml"
+final_safe=$root/g10-sanitized-evidence.yaml
+rm -f "$diagnostics" "$root/g10-raw-evidence.yaml" "$final_safe" "$root/g10-rendered-kong.yml"
 
 
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required for locked source materialization}"
@@ -57,6 +58,7 @@ compose="docker compose -f $fixture/g10-compose.yml"
 raw=$fixture/g10-raw-evidence.yaml
 safe=$fixture/g10-sanitized-evidence.yaml
 certs=$fixture/g10-certs
+rm -f "$final_safe"
 rendered=$fixture/g10-rendered-kong.yml
 
 phase source-verification
@@ -128,6 +130,7 @@ for _ in $(seq 1 300); do
       "$fixture/g10-business-check.sh" >"$raw" || failed
       phase evidence-sanitization
       python3 "$fixture/sanitize-g10-evidence.py" "$raw" "$safe" || failed
+      cp "$safe" "$final_safe"
       printf '%s\n' 'G10 locked E2E and sanitized evidence passed.'
       exit 0
     fi
