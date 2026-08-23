@@ -78,6 +78,7 @@ body() { cat "$private/$1.body"; }
 
 sql_identity() { $compose exec -T identity-postgres psql -U postgres -d identity_db -tA -c "$1"; }
 sql_member() { $compose exec -T member-postgres psql -U postgres -d gym_member -tA -c "$1"; }
+sql_checkin() { $compose exec -T yugabyte sh -ec "ysqlsh -h \"\$(hostname)\" -d checkin_db -tA -c \"$1\""; }
 
 wait_for() {
   name=$1 command=$2
@@ -183,6 +184,18 @@ if [ "$skip_fixture" != 1 ]; then
   add_check checkin_scan_positive passed 0
   printf '%s\n' 'checkin_scan_positive passed' >&2
 
+  for _ in $(seq 1 120); do
+    published_count=$(sql_checkin "SELECT count(*) FROM outbox_events WHERE topic = 'checkin.recorded.v1' AND message_key = '$member_id' AND status = 'PUBLISHED'" | tr -d '[:space:]')
+    [ "$published_count" = 1 ] && break
+    sleep 1
+  done
+  [ "$published_count" = 1 ] || {
+    printf '%s\n' 'Timed out waiting for checkin.recorded.v1 outbox publication.' >&2
+    exit 1
+  }
+  add_check checkin_outbox_published passed 0
+  printf '%s\n' 'checkin_outbox_published passed' >&2
+
   expect_status 200 scan-replay POST /api/v1/check-ins:scan "$customer" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-scan-$user_id\"}"
   body scan-replay | assert_json 'obj["success"] and obj["record"]["id"] == args[0]' "$record_id"
   add_check checkin_scan_idempotent_replay passed 0
@@ -196,6 +209,12 @@ if [ "$skip_fixture" != 1 ]; then
   body history-after | assert_json 'obj["total"] == 1 and len(obj["records"]) == 1 and obj["records"][0]["id"] == args[0]' "$record_id"
   add_check checkin_my_history_after_scan passed 0
   printf '%s\n' 'checkin_my_history_after_scan passed' >&2
+
+  # Replay must not create a second outbox row for the same check-in key.
+  published_count=$(sql_checkin "SELECT count(*) FROM outbox_events WHERE topic = 'checkin.recorded.v1' AND message_key = '$member_id' AND status = 'PUBLISHED'" | tr -d '[:space:]')
+  [ "$published_count" = 1 ]
+  add_check checkin_outbox_idempotent_single_publish passed 0
+  printf '%s\n' 'checkin_outbox_idempotent_single_publish passed' >&2
 
   expect_status 403 scan-admin-forbidden POST /api/v1/check-ins:scan "$admin" "{\"gymId\":\"$gym_id\",\"qrPayload\":\"$qr\",\"idempotencyKey\":\"g10-admin-scan-$user_id\"}"
   add_check checkin_scan_admin_forbidden passed 0
