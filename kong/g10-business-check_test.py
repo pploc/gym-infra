@@ -5,25 +5,31 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).parent
 
 
 class G10BusinessCheckTest(unittest.TestCase):
-    def test_given_all_negative_probes_pass_when_script_runs_then_stdout_is_yaml_only(self):
+    def test_given_negative_probes_pass_when_fixture_skipped_then_stdout_is_safe_yaml(self):
         # given
         with tempfile.TemporaryDirectory() as directory:
             bin_dir = Path(directory) / "bin"
             bin_dir.mkdir()
             curl = bin_dir / "curl"
-            curl.write_text("#!/bin/sh\ncase \"$*\" in\n  */api/v1/users/me) printf '%s\\n' 401 ;;\n  *) printf '%s\\n' 404 ;;\nesac\n")
-
+            curl.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  */api/v1/users/me|*/api/v1/check-ins/me|*check-in-qr*) printf '%s\\n' 401 ;;\n"
+                "  *) printf '%s\\n' 404 ;;\n"
+                "esac\n"
+            )
             curl.chmod(0o700)
-            raw = Path(directory) / "raw.yaml"
             environment = os.environ | {
                 "PATH": f"{bin_dir}:{os.environ['PATH']}",
-                "G10_RAW_EVIDENCE": str(raw),
                 "G10_BASE_URL": "https://fixture.invalid",
                 "G10_CA_CERT": str(Path(directory) / "ca.crt"),
+                "G10_SKIP_FIXTURE": "1",
             }
 
             # when
@@ -37,8 +43,11 @@ class G10BusinessCheckTest(unittest.TestCase):
 
             # then
             self.assertEqual(0, result.returncode, result.stderr)
-            self.assertEqual("", result.stdout)
-            self.assertIn("route_and_auth_negative_matrix", raw.read_text())
+            evidence = yaml.safe_load(result.stdout)
+            names = [check["name"] for check in evidence["checks"]]
+            self.assertEqual(["route_and_auth_negative_matrix"], names)
+            self.assertIn("missing_jwt_checkins_me", result.stderr)
+            self.assertIn("G10 business matrix passed.", result.stderr)
 
 
 if __name__ == "__main__":
