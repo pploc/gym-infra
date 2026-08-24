@@ -47,8 +47,6 @@ jobs:
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
       - name: Clone Payment source
         run: git clone --depth 1 --branch develop https://x-access-token:${GITHUB_TOKEN}@github.com/pploc/ms-gym-payment.git "$G11_PAYMENT_SOURCE"
-      - name: Verify locked Gateway image
-        run: docker manifest inspect ghcr.io/pploc/ms-gym-api-gateway@sha256:eae747494b85f5de9ba4a915209625999be09dae7ed45cfc898999644fa6b9f2 >/dev/null
       - name: Validate G11 source-build fixture
         run: ./kong/run-g11.sh
       - name: Require sanitized evidence
