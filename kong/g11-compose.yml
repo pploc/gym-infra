@@ -413,6 +413,7 @@ services:
 
   ms-gym-api-gateway:
     image: ${G11_GATEWAY_IMAGE:?G11_GATEWAY_IMAGE is required}
+    platform: linux/amd64
     depends_on:
       ms-gym-member:
         condition: service_healthy
