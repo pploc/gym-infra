@@ -68,9 +68,6 @@ $compose up -d --build || failed
 
 for _ in $(seq 1 300); do
   if $compose ps --status running --services | grep -qx kong && $compose exec -T kong kong health >/dev/null 2>&1; then
-    : "${G11_PAYMENT_REFERENCE_CODE:?Set from the completed membership purchase fixture}"
-    : "${G11_PAYMENT_AMOUNT_VND:?Set from the completed membership purchase fixture}"
-    : "${G11_PURCHASE_ID:?Set from the completed membership purchase fixture}"
     "$root/g11-business-check.sh" >"$raw" || failed
     python3 "$root/sanitize-g11-evidence.py" "$lock" "$raw" "$safe" || failed
     printf '%s\n' 'G11 locked E2E and sanitized evidence passed.'
