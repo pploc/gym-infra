@@ -46,6 +46,22 @@ import json, sys
 print(json.load(open(sys.argv[1]))["repositories"]["infrastructure"]["sha"])
 PY
 )" ] || failed
+python3 - "$lock" "$root" "$G11_PAYMENT_ROOT" <<'PY' || failed
+import hashlib, json, sys
+from pathlib import Path
+lock, root, payment = map(Path, sys.argv[1:])
+checks = {
+    "compose": root / "g11-compose.yml",
+    "certGenerator": root / "generate-g11-certs.sh",
+    "kongTemplate": root / "g11-kong-template.yml",
+    "businessCheck": root / "g11-business-check.sh",
+    "evidenceSanitizer": root / "sanitize-g11-evidence.py",
+    "paymentMigration": payment / "src/main/resources/db/migration/V1__create_payment_intents_receipts_and_outbox.sql",
+}
+for name, path in checks.items():
+    if hashlib.sha256(path.read_bytes()).hexdigest() != lock["checksums"][name]:
+        raise SystemExit(f"{name} checksum mismatch")
+PY
 "$root/generate-g11-certs.sh" "$certs" || failed
 python3 "$root/render-g11-config.py" --manifest "$G11_PROTO_ROOT/contracts/v1/http/active-operations.yaml" --template "$root/g11-kong-template.yml" --cert-dir "$certs" --output "$rendered" || failed
 

@@ -12,6 +12,8 @@ GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_IMAGE = re.compile(r"^[a-z0-9./_-]+(?::[a-z0-9._-]+)?@sha256:[0-9a-f]{64}$")
 REPOSITORIES = {"gymProto", "identifier", "member", "plans", "checkin", "payment", "infrastructure"}
 IMAGES = {"identifier", "member", "plans", "checkin", "payment", "gateway", "postgres", "redis", "yugabyte", "localstack", "kafka", "schemaRegistry", "kong", "buf", "schemaSeed"}
+CHECKSUMS = {"compose", "certGenerator", "kongTemplate", "businessCheck", "evidenceSanitizer", "paymentMigration"}
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
 def given_g11_image_lock_when_validated_then_require_pinned_sources_and_images(lock: dict) -> None:
@@ -34,8 +36,16 @@ def given_g11_image_lock_when_validated_then_require_pinned_sources_and_images(l
     webhook = lock.get("routes", {}).get("paymentWebhook")
     if webhook != {"method": "POST", "path": "/api/v1/payments/webhook/sepay", "jwt": False, "rawBodyPreserved": True}:
         raise ValueError("G11 webhook route lock is invalid")
-    if not lock.get("requiredFinalization"):
-        raise ValueError("G11 finalization is missing")
+    checksums = lock.get("checksums")
+    if not isinstance(checksums, dict) or set(checksums) != CHECKSUMS:
+        raise ValueError("G11 checksum set is invalid")
+    if any(not isinstance(value, str) or SHA256.fullmatch(value) is None for value in checksums.values()):
+        raise ValueError("G11 checksum is invalid")
+    runs = lock.get("protectedRuns")
+    if not isinstance(runs, list) or not runs or any(not isinstance(run, str) or not run.startswith("https://github.com/") for run in runs):
+        raise ValueError("G11 protected runs are invalid")
+    if lock.get("requiredFinalization") != ["Accountable owner acceptance"]:
+        raise ValueError("G11 owner acceptance is missing")
 
 
 def main() -> int:

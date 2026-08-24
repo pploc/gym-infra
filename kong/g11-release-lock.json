@@ -73,9 +73,20 @@
     "buf": "bufbuild/buf:1.61.0@sha256:3b7fb27f8ff153037b3f781924c6aa1327352f14ee547cf45fd75f6d994fe0eb",
     "schemaSeed": "eclipse-temurin:26-jdk@sha256:6ed484c3607a9ad524689b0ece7e6a7c0b929f408d05ba4651c475a2cdb20bc8"
   },
-  "checksums": {},
+  "checksums": {
+    "compose": "00ad86f2a655235f4af30cc3630401946fd17e402b1dc6b00a97a959ec7fb179",
+    "certGenerator": "930afecffe6d8818156f10776910f154e36fe55bf9f3991dd80e88e9d5c96fc5",
+    "kongTemplate": "2a65ee38d95931c05c5dcc49eb5be6ac6cd3b736fa238cdbc60b006ae2d56913",
+    "businessCheck": "fa6b54db44b0edd5c4294b6df1616d29b65d1db42d603e8d7dc5c5dadfec2d6e",
+    "evidenceSanitizer": "da807880e61bb54f71addd23fbde5c0496cf592ef440ebea529c63fd0be987a6",
+    "paymentMigration": "ad5c092747f1251ad8d8667e18a61910e00a0460d4edde29d091b148385ee375"
+  },
+  "protectedRuns": [
+    "https://github.com/pploc/ms-gym-member/actions/runs/32736698810",
+    "https://github.com/pploc/ms-gym-payment/actions/runs/32738591395",
+    "https://github.com/pploc/gym-infra/actions/runs/32739762206"
+  ],
   "requiredFinalization": [
-    "Record final G11 checksums after locked runtime proof passes",
-    "Record protected G11 gate URL after success"
+    "Accountable owner acceptance"
   ]
 }
