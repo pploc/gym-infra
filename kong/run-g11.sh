@@ -49,7 +49,8 @@ PY
 python3 - "$lock" "$root" "$G11_PAYMENT_ROOT" <<'PY' || failed
 import hashlib, json, sys
 from pathlib import Path
-lock, root, payment = map(Path, sys.argv[1:])
+lock_path, root, payment = map(Path, sys.argv[1:])
+lock = json.loads(lock_path.read_text())
 checks = {
     "compose": root / "g11-compose.yml",
     "certGenerator": root / "generate-g11-certs.sh",
