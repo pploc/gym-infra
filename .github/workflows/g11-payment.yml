@@ -38,7 +38,7 @@ jobs:
       contents: read
       packages: read
     env:
-      GITHUB_TOKEN: ${{ secrets.G11_READ_TOKEN || github.token }}
+      GITHUB_TOKEN: ${{ secrets.G11_READ_TOKEN || secrets.G10_READ_TOKEN || github.token }}
       GITHUB_ACTOR: ${{ github.actor }}
       G11_PAYMENT_SOURCE: ${{ github.workspace }}/payment-source
     steps:
