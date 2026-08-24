@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Materialize locked G11 repositories and require explicit local Payment source."""
+"""Materialize locked G11 repositories."""
 
 from __future__ import annotations
 
@@ -26,8 +26,10 @@ LOCAL_REPOSITORIES = {
     "member": "ms-gym-member",
     "plans": "ms-gym-plans",
     "checkin": "ms-gym-checkin",
+    "payment": "ms-gym-payment",
     "infrastructure": "gym-infra",
 }
+NAMES = tuple(ENV_NAMES)
 
 
 def local_root() -> Path | None:
@@ -55,10 +57,6 @@ def main() -> int:
     parser.add_argument("--workspace", type=Path, required=True)
     args = parser.parse_args()
     lock = json.loads(args.lock.read_text())
-    source = os.environ.get("G11_PAYMENT_SOURCE", "")
-    payment = Path(source).expanduser().resolve() if source else None
-    if payment is None or not payment.is_dir() or not (payment / "Dockerfile").is_file():
-        raise SystemExit("G11_PAYMENT_SOURCE must be a Payment service directory containing Dockerfile")
     if args.workspace.exists():
         raise SystemExit(f"workspace already exists: {args.workspace}")
     args.workspace.mkdir(mode=0o700)
@@ -66,8 +64,7 @@ def main() -> int:
     try:
         repositories = lock["repositories"]
         root = local_root()
-        paths = {name: materialize(name, repositories[name], args.workspace, env, root) for name in G10.NAMES}
-        paths["payment"] = payment
+        paths = {name: materialize(name, repositories[name], args.workspace, env, root) for name in NAMES}
         for name, path in paths.items():
             print(f"export {ENV_NAMES[name].replace('G10_', 'G11_')}={shlex.quote(str(path))}")
     except BaseException:

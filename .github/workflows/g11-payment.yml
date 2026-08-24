@@ -40,13 +40,10 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.G11_READ_TOKEN || secrets.G10_READ_TOKEN || github.token }}
       GITHUB_ACTOR: ${{ github.actor }}
-      G11_PAYMENT_SOURCE: ${{ github.workspace }}/payment-source
     steps:
       - uses: actions/checkout@v4
       - name: Authenticate GHCR pull
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-      - name: Clone Payment source
-        run: git clone --depth 1 --branch develop https://x-access-token:${GITHUB_TOKEN}@github.com/pploc/ms-gym-payment.git "$G11_PAYMENT_SOURCE"
       - name: Validate G11 source-build fixture
         run: ./kong/run-g11.sh
       - name: Require sanitized evidence

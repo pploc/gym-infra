@@ -3,9 +3,6 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 lock=$root/g11-release-lock.json
-payment=${G11_PAYMENT_SOURCE:?G11_PAYMENT_SOURCE is required; no Payment image is published}
-[ -f "$payment/Dockerfile" ] || { printf '%s\n' 'Payment Dockerfile is required.' >&2; exit 1; }
-[ -f "$payment/build.gradle" ] || { printf '%s\n' 'Payment build.gradle is required.' >&2; exit 1; }
 : "${G11_SEPAY_WEBHOOK_SECRET:=$(python3 -c 'import secrets; print(secrets.token_hex(32))')}"
 export G11_SEPAY_WEBHOOK_SECRET
 

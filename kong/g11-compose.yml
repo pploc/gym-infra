@@ -263,13 +263,7 @@ services:
       retries: 30
 
   ms-gym-payment:
-    image: ${G11_PAYMENT_IMAGE:-gym-g11-payment:local}
-    build:
-      context: ${G11_PAYMENT_ROOT:?G11_PAYMENT_ROOT is required}
-      secrets:
-        - source: github_token
-          target: github_token
-          mode: 0400
+    image: ${G11_PAYMENT_IMAGE:?G11_PAYMENT_IMAGE is required}
     depends_on:
       payment-postgres:
         condition: service_healthy
@@ -485,7 +479,3 @@ volumes:
   g11-proto-build:
     name: gym-g11-proto-build
     driver: local
-
-secrets:
-  github_token:
-    environment: GITHUB_TOKEN

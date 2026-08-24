@@ -1,6 +1,6 @@
 {
-  "lockVersion": 1,
-  "status": "source-build-pending-payment-image",
+  "lockVersion": 2,
+  "status": "image-lock-pending-gate",
   "gymProto": {
     "version": "v7.0.2",
     "sourceSha": "8da83a33411d10442a854fe1d05d34356fe85643",
@@ -17,7 +17,7 @@
     },
     "member": {
       "url": "https://github.com/pploc/ms-gym-member.git",
-      "sha": "2a7a060a8ea3e2505ffb947ce98aa77f7d04c89b"
+      "sha": "48f09867e5727fbbc17e0a9f55b7fa71ccec9e65"
     },
     "plans": {
       "url": "https://github.com/pploc/ms-gym-plans.git",
@@ -29,8 +29,7 @@
     },
     "payment": {
       "url": "https://github.com/pploc/ms-gym-payment.git",
-      "sha": null,
-      "sourceEnv": "G11_PAYMENT_SOURCE"
+      "sha": "58f1e26aa2b5094811cfd5f81847ee38f14453b2"
     },
     "infrastructure": {
       "url": "https://github.com/pploc/gym-infra.git",
@@ -59,10 +58,10 @@
   },
   "images": {
     "identifier": "ghcr.io/pploc/ms-gym-identifier@sha256:0d6466c143bc905bb12d5b8d4f24f2188e561bc798771e6dbe60ad98509a6de5",
-    "member": "ghcr.io/pploc/ms-gym-member@sha256:cfa7e4cceaa1cb0fcda7b3c0b11aaaa399c7bb92584a679a0e105bb4657decbc",
+    "member": "ghcr.io/pploc/ms-gym-member@sha256:b9ef68f024c3a9636d50260e0e3f767b085784e9ca161ca39dce19050ca8779d",
     "plans": "ghcr.io/pploc/ms-gym-plans@sha256:5de9615e8f95685833677311150f8d37cd1c308b499720c58869261cdbcc77f1",
     "checkin": "ghcr.io/pploc/ms-gym-checkin@sha256:6fbaf44bc9604e580341cf18b6388bcc913886cf6305fb2f0c13a4dad21b8efe",
-    "payment": null,
+    "payment": "ghcr.io/pploc/ms-gym-payment@sha256:6ad29b14dea795325853d64479fa2f271ab551dd20356331b558141227b6442a",
     "gateway": "ghcr.io/pploc/ms-gym-api-gateway@sha256:eae747494b85f5de9ba4a915209625999be09dae7ed45cfc898999644fa6b9f2",
     "postgres": "postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685",
     "redis": "redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2",
@@ -76,8 +75,7 @@
   },
   "checksums": {},
   "requiredFinalization": [
-    "Set repositories.payment.sha after Payment source is published",
-    "Set images.payment to a digest when the Payment image is published",
-    "Materialize final G11 checksums after Payment runtime contract lands"
+    "Record final G11 checksums after locked runtime proof passes",
+    "Record protected G11 gate URL after success"
   ]
 }
