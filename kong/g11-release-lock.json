@@ -84,7 +84,7 @@
   "protectedRuns": [
     "https://github.com/pploc/ms-gym-member/actions/runs/32736698810",
     "https://github.com/pploc/ms-gym-payment/actions/runs/32738591395",
-    "https://github.com/pploc/gym-infra/actions/runs/32739762206"
+    "https://github.com/pploc/gym-infra/actions/runs/32740792386"
   ],
   "requiredFinalization": [
     "Accountable owner acceptance"
