@@ -29,7 +29,7 @@
     },
     "payment": {
       "url": "https://github.com/pploc/ms-gym-payment.git",
-      "sha": "58f1e26aa2b5094811cfd5f81847ee38f14453b2"
+      "sha": "f88a25eb9c6b04b6970b627d8f9c3112ab87d641"
     },
     "infrastructure": {
       "url": "https://github.com/pploc/gym-infra.git",
@@ -61,7 +61,7 @@
     "member": "ghcr.io/pploc/ms-gym-member@sha256:b9ef68f024c3a9636d50260e0e3f767b085784e9ca161ca39dce19050ca8779d",
     "plans": "ghcr.io/pploc/ms-gym-plans@sha256:5de9615e8f95685833677311150f8d37cd1c308b499720c58869261cdbcc77f1",
     "checkin": "ghcr.io/pploc/ms-gym-checkin@sha256:6fbaf44bc9604e580341cf18b6388bcc913886cf6305fb2f0c13a4dad21b8efe",
-    "payment": "ghcr.io/pploc/ms-gym-payment@sha256:6ad29b14dea795325853d64479fa2f271ab551dd20356331b558141227b6442a",
+    "payment": "ghcr.io/pploc/ms-gym-payment@sha256:3afb6c28b8e9eb8a3da47808e823b998a522455e4f978e34275584b585c87090",
     "gateway": "ghcr.io/pploc/ms-gym-api-gateway@sha256:eae747494b85f5de9ba4a915209625999be09dae7ed45cfc898999644fa6b9f2",
     "postgres": "postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685",
     "redis": "redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2",
