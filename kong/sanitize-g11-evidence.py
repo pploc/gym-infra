@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and emit source-build G11 evidence without sensitive values."""
+"""Validate and emit image-locked G11 evidence without sensitive values."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def sanitize(raw: object, lock: dict) -> dict:
     require(source is not None, "G11 evidence must be a mapping")
     require(set(source) == {"schemaVersion", "mode", "gates", "checks"}, "G11 evidence keys are invalid")
     require(source["schemaVersion"] == 1, "G11 evidence schema version is invalid")
-    require(source["mode"] == "source-build-pending-payment-image", "G11 evidence mode is invalid")
+    require(source["mode"] == "image-lock-pending-gate", "G11 evidence mode is invalid")
 
     gates = source["gates"]
     require(isinstance(gates, dict) and gates.get("result") == "passed", "G11 gates did not pass")
@@ -48,10 +48,10 @@ def sanitize(raw: object, lock: dict) -> dict:
         require(check["result"] == "passed" and check["exitCode"] == 0, "G11 check did not pass")
 
     source_shas = {name: repository.get("sha") for name, repository in lock["repositories"].items()}
-    for name, sha in source_shas.items():
-        require((name == "payment" and sha is None) or isinstance(sha, str) and SHA.fullmatch(sha), "G11 source SHA is invalid")
-    for name, image in lock["images"].items():
-        require((name == "payment" and image is None) or isinstance(image, str) and DIGEST.fullmatch(image), "G11 image is invalid")
+    for sha in source_shas.values():
+        require(isinstance(sha, str) and SHA.fullmatch(sha), "G11 source SHA is invalid")
+    for image in lock["images"].values():
+        require(isinstance(image, str) and DIGEST.fullmatch(image), "G11 image is invalid")
 
     evidence = {
         "schemaVersion": 1,

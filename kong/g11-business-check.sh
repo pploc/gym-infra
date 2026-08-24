@@ -171,7 +171,7 @@ for _ in $(seq 1 120); do
 import yaml
 print(yaml.safe_dump({
     "schemaVersion": 1,
-    "mode": "source-build-pending-payment-image",
+    "mode": "image-lock-pending-gate",
     "gates": {"result": "passed", "exitCodes": {"business": 0}},
     "checks": [
         {"name": "membership_sepay_initiation_idempotency", "result": "passed", "exitCode": 0},
