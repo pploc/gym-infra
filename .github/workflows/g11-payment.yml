@@ -1,0 +1,69 @@
+name: G11 Payment Fixture
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [develop]
+    paths:
+      - kong/g11-*
+      - kong/materialize-g11.py
+      - kong/render-g11-config.py
+      - kong/generate-g11-certs.sh
+      - kong/run-g11.sh
+      - kong/sanitize-g11-evidence.py
+      - helm/gym-service/**
+      - .github/workflows/g11-payment.yml
+  push:
+    branches: [develop]
+    paths:
+      - kong/g11-*
+      - kong/materialize-g11.py
+      - kong/render-g11-config.py
+      - kong/generate-g11-certs.sh
+      - kong/run-g11.sh
+      - kong/sanitize-g11-evidence.py
+      - helm/gym-service/**
+      - .github/workflows/g11-payment.yml
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  g11:
+    name: G11 locked fixture gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.G11_READ_TOKEN || secrets.G10_READ_TOKEN || github.token }}
+      GITHUB_ACTOR: ${{ github.actor }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate GHCR pull
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Validate G11 source-build fixture
+        run: ./kong/run-g11.sh
+      - name: Require sanitized evidence
+        run: test -s kong/g11-sanitized-evidence.yaml
+      - name: Upload sanitized G11 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g11-sanitized-${{ github.sha }}
+          path: kong/g11-sanitized-evidence.yaml
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload private G11 failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g11-failure-${{ github.sha }}
+          path: |
+            kong/g11-last-run.log
+            kong/g11-raw-evidence.yaml
+            kong/g11-rendered-kong.yml
+          if-no-files-found: ignore
+          retention-days: 3

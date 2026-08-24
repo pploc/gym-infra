@@ -1,0 +1,150 @@
+# G11 local source builds use this identity; no Payment image is published yet.
+nameOverride: ms-gym-payment
+
+image:
+  repository: ghcr.io/pploc/ms-gym-payment
+  tag: g11-source-build-required
+
+service:
+  type: ClusterIP
+  grpcPort: 50051
+  httpPort: 8080
+  metricsPort: 9090
+
+probes:
+  enabled: true
+  liveness:
+    path: /actuator/health/liveness
+    port: http
+  readiness:
+    path: /actuator/health/readiness
+    port: http
+  startup:
+    enabled: true
+    path: /actuator/health/liveness
+    port: http
+
+istio:
+  enabled: true
+  inject: true
+  gateway:
+    create: false
+    name: gym-gateway
+    hosts:
+      - payment.gym.local
+  virtualService:
+    enabled: false
+  destinationRule:
+    enabled: true
+    tlsMode: ISTIO_MUTUAL
+  peerAuthentication:
+    enabled: true
+    mtlsMode: STRICT
+
+ingress:
+  enabled: false
+
+env:
+  - name: ENV
+    value: local
+  - name: SPRING_DATASOURCE_URL
+    value: jdbc:postgresql://postgres:5432/payment_db
+  - name: SPRING_DATASOURCE_USERNAME
+    value: postgres
+  - name: SPRING_DATASOURCE_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: ms-gym-payment-secrets
+        key: db-password
+  - name: KAFKA_BOOTSTRAP_SERVERS
+    value: kafka:9092
+  - name: SCHEMA_REGISTRY_URL
+    value: http://schema-registry:8081
+  - name: GRPC_SERVER_PORT
+    value: "50051"
+  - name: PAYMENT_GRPC_TLS_ENABLED
+    value: "true"
+  - name: PAYMENT_GRPC_ALLOW_PLAINTEXT
+    value: "false"
+  - name: PAYMENT_GRPC_SERVER_CERT
+    value: /var/run/payment-mtls/server.crt
+  - name: PAYMENT_GRPC_SERVER_KEY
+    value: /var/run/payment-mtls/server.key
+  - name: PAYMENT_GRPC_CLIENT_CA
+    value: /var/run/payment-mtls/ca.crt
+  - name: SEPAY_WEBHOOK_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: ms-gym-payment-secrets
+        key: sepay-webhook-secret
+
+volumeMounts:
+  - name: grpc-mtls
+    mountPath: /var/run/payment-mtls
+    readOnly: true
+volumes:
+  - name: grpc-mtls
+    secret:
+      secretName: ms-gym-payment-grpc-mtls
+
+# Member owns gRPC initiation. Kong owns only the native SePay webhook HTTP edge.
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-member
+      ports:
+        - protocol: TCP
+          port: 50051
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 9090
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: schema-registry
+      ports:
+        - protocol: TCP
+          port: 8081
