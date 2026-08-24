@@ -1,0 +1,70 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: ms-gym-identifier
+    url: http://ms-gym-identifier:8080
+    routes: []
+  - name: ms-gym-api-gateway
+    protocol: https
+    host: ms-gym-api-gateway
+    port: 8443
+    client_certificate:
+      id: 10000000-0000-0000-0000-000000000001
+    tls_verify: true
+    tls_verify_depth: 1
+    ca_certificates: [20000000-0000-0000-0000-000000000001]
+    routes: []
+  - name: ms-gym-payment-webhook
+    url: http://ms-gym-payment:8080
+    routes:
+      - name: payment-sepay-webhook
+        protocols: [https]
+        methods: [POST]
+        paths: ["~/api/v1/payments/webhook/sepay$"]
+        strip_path: false
+        preserve_host: false
+        request_buffering: true
+        regex_priority: 200
+
+plugins:
+  - name: gym-jwt-claims
+    config:
+      issuer: gym-identifier
+      audience: gym-api
+      public_keys:
+        current: |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz7xgKWkH36yxL5kws7M3
+          i5VC79DjxPCDyOBel8z0SrxACOOvXHaL71pjFEtY80RXlMkzB90cwNk1DICuS5Sq
+          omjguXLUoWjvbbC13P08wgNLU3JVKz9RHw2nS+PgbSIVk8vzWzYX4yF52zIYrkX8
+          r1vpkaCBcI9HVdbyzy7oMJT2X6mygQGxblxiinqKZN5MbrOLZN+7rqR27cECgvTo
+          1D/fe09TbHBqd4rWNdwsKsB/J1kmaTjj5xc1G20PutGSbzPDfuTPUDbwptIibX/q
+          Fs5qnSq9nZ1o46WgQm5pfyCGuafLrv+ODE8pbiR/hJw15QPaK0QbKOfhK8xJ8+B/
+          +wIDAQAB
+          -----END PUBLIC KEY-----
+        previous: |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA30vynafr+KQDCvbt3O+/
+          ZkEDmlHyADqEOXltfqbeVc7bVwaaIvk6ifK0XBulskCv89Xj8WQkm2FX7CGjoqmM
+          D3GA+WfQIBu6n1YpDY3c5CUvQp64wEvQ0IMt+iZnK/Tl8C4V1h52qkLI9cPpO2d7
+          GsfPUZ8hll7+3+LhpCmD3w48oNO8hiO4C7SUJnRw3yzGWX4X0HPCadgvZZkKA0NW
+          T2dfKZWC2CUMyTTJfTGL9G68DJDEkzgb9uXZ2qThEKx04C3vYUhZ7bJ7Rdq+XyUF
+          L/wq/sVBYT5tmR9rynPrvz5sWC5s1CJ13q4A/HTafNGpyl5eUBJiuI+NfpQUaOiR
+          VQIDAQAB
+          -----END PUBLIC KEY-----
+      # Deliberately excludes the provider-authenticated webhook.
+      protected_http_routes: []
+      redis_host: redis
+      redis_port: 6379
+      redis_timeout_ms: 50
+      redis_database: 0
+  - name: cors
+    config:
+      origins: ["https://localhost:3000"]
+      methods: [GET, POST, PUT, OPTIONS]
+      headers: [Accept, Authorization, Content-Type, If-Match, Traceparent, Tracestate, X-SePay-Signature, X-SePay-Timestamp]
+      exposed_headers: [x-error-code, grpc-status, grpc-message]
+      credentials: true
+      max_age: 3600
+      preflight_continue: false

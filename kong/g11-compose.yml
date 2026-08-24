@@ -1,0 +1,491 @@
+# G11 source-build fixture. The lock pins service source; Payment remains a local build until an image digest exists.
+name: gym-g11
+
+services:
+  yugabyte:
+    image: ${G11_YUGABYTE_IMAGE:?G11_YUGABYTE_IMAGE is required}
+    command: ["bin/yugabyted", "start", "--background=false"]
+    healthcheck:
+      test: ["CMD-SHELL", "ysqlsh -h \"$$(hostname)\" -c 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  localstack:
+    image: ${G11_LOCALSTACK_IMAGE:?G11_LOCALSTACK_IMAGE is required}
+    environment:
+      SERVICES: kms
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:4566/_localstack/health >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  kms-init:
+    image: ${G11_LOCALSTACK_IMAGE:?G11_LOCALSTACK_IMAGE is required}
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["sh", "-ec"]
+    command:
+      - >-
+        aws --endpoint-url=http://localstack:4566 kms describe-key --key-id
+        alias/ms-gym-checkin-qr-root >/dev/null 2>&1 || { key_id=$$(aws
+        --endpoint-url=http://localstack:4566 kms create-key --description 'ms-gym-checkin
+        G11 QR root key' --query KeyMetadata.KeyId --output text); aws
+        --endpoint-url=http://localstack:4566 kms create-alias --alias-name
+        alias/ms-gym-checkin-qr-root --target-key-id "$$key_id"; }
+
+  kafka:
+    image: ${G11_KAFKA_IMAGE:?G11_KAFKA_IMAGE is required}
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  schema-registry:
+    image: ${G11_SCHEMA_REGISTRY_IMAGE:?G11_SCHEMA_REGISTRY_IMAGE is required}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/subjects"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  topic-seed:
+    image: ${G11_KAFKA_IMAGE:?G11_KAFKA_IMAGE is required}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: >-
+      sh -ec 'for topic in
+      identity.user.registered.v1 identity.user.suspended.v1 identity.user.role-changed.v1
+      identity.email.verification-requested.v1 payment.completed.v1
+      membership.activated.v1 membership.paused.v1 membership.resumed.v1
+      membership.expiring-soon.v1 membership.expired.v1 checkin.recorded.v1; do
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists
+      --topic "$$topic" --partitions 1 --replication-factor 1;
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists
+      --topic "$$topic.DLQ" --partitions 1 --replication-factor 1;
+      done'
+
+  schema-java-generate:
+    image: ${G11_BUF_IMAGE:?G11_BUF_IMAGE is required}
+    environment:
+      HOME: /tmp
+    volumes:
+      - ${G11_PROTO_ROOT:?G11_PROTO_ROOT is required}:/source:ro
+      - g11-proto-build:/work
+      - ./g11-java.buf.gen.yaml:/template/buf.gen.yaml:ro
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        find /work -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+        cp -a /source/. /work/
+        sed -i 's/\r$//' /work/gradlew
+        cd /work
+        exec buf generate --template /template/buf.gen.yaml
+
+  schema-seed:
+    image: ${G11_SCHEMA_SEED_IMAGE:?G11_SCHEMA_SEED_IMAGE is required}
+    depends_on:
+      topic-seed:
+        condition: service_completed_successfully
+      schema-registry:
+        condition: service_healthy
+      schema-java-generate:
+        condition: service_completed_successfully
+    working_dir: /work
+    environment:
+      GRADLE_USER_HOME: /tmp/gradle
+    volumes:
+      - g11-proto-build:/source:ro
+    command: >-
+      sh -ec 'work=$$(mktemp -d) && cp -a /source/. "$$work/" && cd "$$work" &&
+      exec ./gradlew seedConfluentSchemas -PschemaRegistryUrl=http://schema-registry:8081 --no-daemon'
+
+  checkin-migrate:
+    image: ${G11_YUGABYTE_IMAGE:?G11_YUGABYTE_IMAGE is required}
+    depends_on:
+      yugabyte:
+        condition: service_healthy
+    volumes:
+      - ${G11_CHECKIN_ROOT:?G11_CHECKIN_ROOT is required}/migrations:/migrations:ro
+    command: ["sh", "-ec", "ysqlsh -h yugabyte -c 'CREATE DATABASE checkin_db' || true; ysqlsh -h yugabyte -d checkin_db -f /migrations/001_init.sql"]
+
+  identity-postgres:
+    image: ${G11_POSTGRES_IMAGE:?G11_POSTGRES_IMAGE is required}
+    environment:
+      POSTGRES_DB: identity_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d identity_db"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  payment-postgres:
+    image: ${G11_POSTGRES_IMAGE:?G11_POSTGRES_IMAGE is required}
+    environment:
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d payment_db"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  member-postgres:
+    image: ${G11_POSTGRES_IMAGE:?G11_POSTGRES_IMAGE is required}
+    environment:
+      POSTGRES_DB: gym_member
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d gym_member"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  plans-postgres:
+    image: ${G11_POSTGRES_IMAGE:?G11_POSTGRES_IMAGE is required}
+    environment:
+      POSTGRES_DB: plans_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d plans_db"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  redis:
+    image: ${G11_REDIS_IMAGE:?G11_REDIS_IMAGE is required}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  identifier-migrate:
+    image: ${G11_POSTGRES_IMAGE:?G11_POSTGRES_IMAGE is required}
+    depends_on:
+      identity-postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: postgres
+    volumes:
+      - ${G11_IDENTIFIER_ROOT:?G11_IDENTIFIER_ROOT is required}/migrations:/migrations:ro
+    command: ["sh", "-ec", "psql -h identity-postgres -U postgres -d identity_db -f /migrations/001_init.sql; psql -h identity-postgres -U postgres -d identity_db -f /migrations/002_email_verification_tokens.sql"]
+
+  ms-gym-identifier:
+    image: ${G11_IDENTIFIER_IMAGE:?G11_IDENTIFIER_IMAGE is required}
+    depends_on:
+      identifier-migrate:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      topic-seed:
+        condition: service_completed_successfully
+      schema-seed:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      ms-gym-plans:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@identity-postgres:5432/identity_db?sslmode=disable
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      JWT_PRIVATE_KEY_PATH: /run/jwt/fixture_rsa.key
+      PLANS_GRPC_ADDR: ms-gym-plans:50051
+      PLANS_CLIENT_CERT: /run/mtls/identifier.crt
+      PLANS_CLIENT_KEY: /run/mtls/identifier.key
+      PLANS_SERVER_CA: /run/mtls/g11-ca.crt
+    volumes:
+      - ./g11-certs/runtime/identifier:/run/mtls:ro
+      - ./certs/fixture_rsa.key:/run/jwt/fixture_rsa.key:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  ms-gym-plans:
+    image: ${G11_PLANS_IMAGE:?G11_PLANS_IMAGE is required}
+    depends_on:
+      plans-postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://plans-postgres:5432/plans_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      PLANS_GRPC_TLS_ENABLED: "true"
+      PLANS_GRPC_SERVER_CERT: /run/mtls/ms-gym-plans.crt
+      PLANS_GRPC_SERVER_KEY: /run/mtls/ms-gym-plans.key
+      PLANS_GRPC_CLIENT_CA: /run/mtls/g11-ca.crt
+    volumes:
+      - ./g11-certs/runtime/plans:/run/mtls:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\\\\r\\\\n\\\\r\\\\n' >&3 && grep -q '200' <&3\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  ms-gym-payment:
+    image: ${G11_PAYMENT_IMAGE:-gym-g11-payment:local}
+    build:
+      context: ${G11_PAYMENT_ROOT:?G11_PAYMENT_ROOT is required}
+      secrets:
+        - source: github_token
+          target: github_token
+          mode: 0400
+    depends_on:
+      payment-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      topic-seed:
+        condition: service_completed_successfully
+      schema-seed:
+        condition: service_completed_successfully
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://payment-postgres:5432/payment_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      GRPC_SERVER_PORT: "50051"
+      PAYMENT_GRPC_TLS_ENABLED: "true"
+      PAYMENT_GRPC_ALLOW_PLAINTEXT: "false"
+      PAYMENT_GRPC_SERVER_CERT: /run/mtls/ms-gym-payment.crt
+      PAYMENT_GRPC_SERVER_KEY: /run/mtls/ms-gym-payment.key
+      PAYMENT_GRPC_CLIENT_CA: /run/mtls/g11-ca.crt
+      SEPAY_WEBHOOK_SECRET: ${G11_SEPAY_WEBHOOK_SECRET:?G11_SEPAY_WEBHOOK_SECRET is required}
+      SEPAY_ACCOUNT_NUMBER: ${G11_SEPAY_ACCOUNT_NUMBER:-g11-account}
+      SEPAY_BANK: ${G11_SEPAY_BANK:-VCB}
+      SEPAY_QR_ACCOUNT: ${G11_SEPAY_ACCOUNT_NUMBER:-g11-account}
+      SEPAY_QR_BANK: ${G11_SEPAY_BANK:-VCB}
+    volumes:
+      - ./g11-certs/runtime/payment:/run/mtls:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  ms-gym-member:
+    image: ${G11_MEMBER_IMAGE:?G11_MEMBER_IMAGE is required}
+    depends_on:
+      member-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      topic-seed:
+        condition: service_completed_successfully
+      schema-seed:
+        condition: service_completed_successfully
+      ms-gym-plans:
+        condition: service_healthy
+      ms-gym-payment:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://member-postgres:5432/gym_member
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      MEMBER_GRPC_TLS_ENABLED: "true"
+      MEMBER_GRPC_SERVER_CERT: /run/mtls/ms-gym-member.crt
+      MEMBER_GRPC_SERVER_KEY: /run/mtls/ms-gym-member.key
+      MEMBER_GRPC_CLIENT_CA: /run/mtls/g11-ca.crt
+      PLANS_GRPC_TARGET: ms-gym-plans:50051
+      PLANS_GRPC_USE_PLAINTEXT: "false"
+      PLANS_CLIENT_CERT: /run/mtls/member-client.crt
+      PLANS_CLIENT_KEY: /run/mtls/member-client.key
+      PLANS_SERVER_CA: /run/mtls/g11-ca.crt
+      PLANS_GRPC_AUTHORITY: ms-gym-plans
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      PAYMENT_GRPC_TARGET: ms-gym-payment:50051
+      PAYMENT_GRPC_USE_PLAINTEXT: "false"
+      PAYMENT_CLIENT_CERT: /run/mtls/member-client.crt
+      PAYMENT_CLIENT_KEY: /run/mtls/member-client.key
+      PAYMENT_SERVER_CA: /run/mtls/g11-ca.crt
+      PAYMENT_GRPC_AUTHORITY: ms-gym-payment
+    volumes:
+      - ./g11-certs/runtime/member:/run/mtls:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\\\\r\\\\n\\\\r\\\\n' >&3 && grep -q '200' <&3\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  ms-gym-checkin:
+    image: ${G11_CHECKIN_IMAGE:?G11_CHECKIN_IMAGE is required}
+    depends_on:
+      checkin-migrate:
+        condition: service_completed_successfully
+      kms-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      topic-seed:
+        condition: service_completed_successfully
+      schema-seed:
+        condition: service_completed_successfully
+      ms-gym-member:
+        condition: service_healthy
+      ms-gym-plans:
+        condition: service_healthy
+    environment:
+      GRPC_ADDR: ":50051"
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: ${G11_CHECKIN_DATABASE_URL:?G11_CHECKIN_DATABASE_URL is required}
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      KMS_ENDPOINT_URL: http://localstack:4566
+      KMS_KEY_ID: alias/ms-gym-checkin-qr-root
+      KAFKA_BROKERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CHECKIN_GRPC_SERVER_CERT: /run/mtls/ms-gym-checkin.crt
+      CHECKIN_GRPC_SERVER_KEY: /run/mtls/ms-gym-checkin.key
+      CHECKIN_GRPC_CLIENT_CA: /run/mtls/g11-ca.crt
+      MEMBER_GRPC_ADDR: ms-gym-member:50051
+      MEMBER_GRPC_CERT: /run/mtls/checkin-client.crt
+      MEMBER_GRPC_KEY: /run/mtls/checkin-client.key
+      MEMBER_GRPC_CA: /run/mtls/g11-ca.crt
+      PLANS_GRPC_ADDR: ms-gym-plans:50051
+      PLANS_GRPC_CERT: /run/mtls/checkin-client.crt
+      PLANS_GRPC_KEY: /run/mtls/checkin-client.key
+      PLANS_GRPC_CA: /run/mtls/g11-ca.crt
+    volumes:
+      - ./g11-certs/runtime/checkin:/run/mtls:ro
+
+  checkin-readiness:
+    image: ${G11_LOCALSTACK_IMAGE:?G11_LOCALSTACK_IMAGE is required}
+    network_mode: service:ms-gym-checkin
+    depends_on:
+      ms-gym-checkin:
+        condition: service_started
+    entrypoint: ["sh", "-ec"]
+    command: ["while :; do sleep 3600; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1:8080/readyz >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  ms-gym-api-gateway:
+    image: ${G11_GATEWAY_IMAGE:?G11_GATEWAY_IMAGE is required}
+    depends_on:
+      ms-gym-member:
+        condition: service_healthy
+      ms-gym-plans:
+        condition: service_healthy
+      checkin-readiness:
+        condition: service_healthy
+    environment:
+      HTTPS_ADDR: ":8443"
+      TLS_SERVER_CERT: /run/mtls/ms-gym-api-gateway-server.crt
+      TLS_SERVER_KEY: /run/mtls/ms-gym-api-gateway-server.key
+      TLS_CLIENT_CA: /run/mtls/g11-ca.crt
+      TLS_CLIENT_CERT: /run/mtls/ms-gym-api-gateway-client.crt
+      TLS_CLIENT_KEY: /run/mtls/ms-gym-api-gateway-client.key
+      MEMBER_GRPC_ADDR: ms-gym-member:50051
+      MEMBER_GRPC_SERVER_CA: /run/mtls/g11-ca.crt
+      PLANS_GRPC_ADDR: ms-gym-plans:50051
+      PLANS_GRPC_SERVER_CA: /run/mtls/g11-ca.crt
+      CHECKIN_GRPC_ADDR: ms-gym-checkin:50051
+      CHECKIN_GRPC_SERVER_CA: /run/mtls/g11-ca.crt
+    volumes:
+      - ./g11-certs/runtime/gateway:/run/mtls:ro
+
+  gateway-readiness:
+    image: ${G11_LOCALSTACK_IMAGE:?G11_LOCALSTACK_IMAGE is required}
+    network_mode: service:ms-gym-api-gateway
+    depends_on:
+      ms-gym-api-gateway:
+        condition: service_started
+    entrypoint: ["sh", "-ec"]
+    command: ["while :; do sleep 3600; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.create_connection(('127.0.0.1',8443),1); s.close()\""]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  kong:
+    image: ${G11_KONG_IMAGE:?G11_KONG_IMAGE is required}
+    depends_on:
+      redis:
+        condition: service_healthy
+      ms-gym-identifier:
+        condition: service_healthy
+      gateway-readiness:
+        condition: service_healthy
+      ms-gym-payment:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kong health || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8443 ssl http2
+      KONG_ADMIN_LISTEN: "off"
+      KONG_SSL_CERT: /run/mtls/kong-proxy.crt
+      KONG_SSL_CERT_KEY: /run/mtls/kong-proxy.key
+      KONG_PLUGINS: bundled,gym-jwt-claims
+      KONG_LUA_PACKAGE_PATH: /opt/?.lua;/opt/?/init.lua;;
+    volumes:
+      - ./g11-rendered-kong.yml:/usr/local/kong/declarative/kong.yml:ro
+      - ./g11-certs/runtime/kong:/run/mtls:ro
+      - ./plugins/gym-jwt-claims:/opt/kong/plugins/gym-jwt-claims:ro
+    ports: ["8443:8443"]
+
+volumes:
+  g11-proto-build:
+    name: gym-g11-proto-build
+    driver: local
+
+secrets:
+  github_token:
+    environment: GITHUB_TOKEN

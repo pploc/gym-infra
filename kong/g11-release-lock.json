@@ -1,0 +1,83 @@
+{
+  "lockVersion": 1,
+  "status": "source-build-pending-payment-image",
+  "gymProto": {
+    "version": "v7.0.2",
+    "sourceSha": "8da83a33411d10442a854fe1d05d34356fe85643",
+    "releaseUrl": "https://github.com/pploc/gym-proto/releases/tag/v7.0.2"
+  },
+  "repositories": {
+    "gymProto": {
+      "url": "https://github.com/pploc/gym-proto.git",
+      "sha": "8da83a33411d10442a854fe1d05d34356fe85643"
+    },
+    "identifier": {
+      "url": "https://github.com/pploc/ms-gym-identifier.git",
+      "sha": "def7936c9e54f489aad5aab246b9300697969d90"
+    },
+    "member": {
+      "url": "https://github.com/pploc/ms-gym-member.git",
+      "sha": "2a7a060a8ea3e2505ffb947ce98aa77f7d04c89b"
+    },
+    "plans": {
+      "url": "https://github.com/pploc/ms-gym-plans.git",
+      "sha": "c0b9f16284c5605032267440bb478d04cebb30d8"
+    },
+    "checkin": {
+      "url": "https://github.com/pploc/ms-gym-checkin.git",
+      "sha": "e26e2089338808f53706e91ee575607646bf631f"
+    },
+    "payment": {
+      "url": "https://github.com/pploc/ms-gym-payment.git",
+      "sha": null,
+      "sourceEnv": "G11_PAYMENT_SOURCE"
+    },
+    "infrastructure": {
+      "url": "https://github.com/pploc/gym-infra.git",
+      "sha": "07f71c7f5002285663983e7594174a94a48e757a"
+    }
+  },
+  "dependencies": {
+    "javaProto": "7.0.2",
+    "goProto": "v1.7.1"
+  },
+  "routes": {
+    "count": 34,
+    "byOwner": {
+      "identity": 12,
+      "member": 7,
+      "plans": 8,
+      "checkin": 6,
+      "paymentWebhook": 1
+    },
+    "paymentWebhook": {
+      "method": "POST",
+      "path": "/api/v1/payments/webhook/sepay",
+      "jwt": false,
+      "rawBodyPreserved": true
+    }
+  },
+  "images": {
+    "identifier": "ghcr.io/pploc/ms-gym-identifier@sha256:0d6466c143bc905bb12d5b8d4f24f2188e561bc798771e6dbe60ad98509a6de5",
+    "member": "ghcr.io/pploc/ms-gym-member@sha256:cfa7e4cceaa1cb0fcda7b3c0b11aaaa399c7bb92584a679a0e105bb4657decbc",
+    "plans": "ghcr.io/pploc/ms-gym-plans@sha256:5de9615e8f95685833677311150f8d37cd1c308b499720c58869261cdbcc77f1",
+    "checkin": "ghcr.io/pploc/ms-gym-checkin@sha256:6fbaf44bc9604e580341cf18b6388bcc913886cf6305fb2f0c13a4dad21b8efe",
+    "payment": null,
+    "gateway": "ghcr.io/pploc/ms-gym-api-gateway@sha256:eae747494b85f5de9ba4a915209625999be09dae7ed45cfc898999644fa6b9f2",
+    "postgres": "postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685",
+    "redis": "redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2",
+    "yugabyte": "yugabytedb/yugabyte@sha256:e69ddcd248db7ee5c097d8c955d3657cf7fd9c21743a4589281767487ab5832b",
+    "localstack": "localstack/localstack@sha256:fc9a03f14f4668f5d874eadb77e5da5461ce735e2ce86b77b0056606c0677dba",
+    "kafka": "apache/kafka@sha256:c9aea96a4813e77e703541b1d8f7d58c9ee05b77353da33684db55c840548791",
+    "schemaRegistry": "confluentinc/cp-schema-registry@sha256:b0f1473e9b724ada5338390346438229206f3568ccee94d78bdff1f37e3c8c52",
+    "kong": "kong:3.8-ubuntu@sha256:250cc9745fde8ce04be060bc8e4338dfc280f54986cb38ef24d03876cb6b6e2f",
+    "buf": "bufbuild/buf:1.61.0@sha256:3b7fb27f8ff153037b3f781924c6aa1327352f14ee547cf45fd75f6d994fe0eb",
+    "schemaSeed": "eclipse-temurin:26-jdk@sha256:6ed484c3607a9ad524689b0ece7e6a7c0b929f408d05ba4651c475a2cdb20bc8"
+  },
+  "checksums": {},
+  "requiredFinalization": [
+    "Set repositories.payment.sha after Payment source is published",
+    "Set images.payment to a digest when the Payment image is published",
+    "Materialize final G11 checksums after Payment runtime contract lands"
+  ]
+}
