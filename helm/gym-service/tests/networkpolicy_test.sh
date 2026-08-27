@@ -9,8 +9,9 @@ helm template member "$root" -f "$root/examples/ms-gym-member-values.yaml" >"$wo
 helm template plans "$root" -f "$root/examples/ms-gym-plans-values.yaml" >"$work/plans.yaml"
 helm template checkin "$root" -f "$root/examples/ms-gym-checkin-values.yaml" >"$work/checkin.yaml"
 helm template payment "$root" -f "$root/examples/ms-gym-payment-values.yaml" >"$work/payment.yaml"
+helm template trainer "$root" -f "$root/examples/ms-gym-trainer-values.yaml" >"$work/trainer.yaml"
 
-python3 - "$work/member.yaml" "$work/plans.yaml" "$work/checkin.yaml" "$work/payment.yaml" <<'PY'
+python3 - "$work/member.yaml" "$work/plans.yaml" "$work/checkin.yaml" "$work/payment.yaml" "$work/trainer.yaml" <<'PY'
 import sys, yaml
 
 
@@ -46,6 +47,9 @@ checkin_egress = edges(checkin_policy["spec"]["egress"], "to")
 payment_policy = policy(sys.argv[4])
 payment_ingress = edges(payment_policy["spec"]["ingress"], "from")
 payment_egress = edges(payment_policy["spec"]["egress"], "to")
+trainer_policy = policy(sys.argv[5])
+trainer_ingress = edges(trainer_policy["spec"]["ingress"], "from")
+trainer_egress = edges(trainer_policy["spec"]["egress"], "to")
 
 # Given active examples, when rendered, then callers have exact peer-to-port edges.
 assert member == {
@@ -73,11 +77,23 @@ assert payment_egress == {
     ("namespace:kube-system", (("UDP", 53), ("TCP", 53))), ("postgres", (("TCP", 5432),)),
     ("kafka", (("TCP", 9092),)), ("schema-registry", (("TCP", 8081),)),
 }, payment_egress
+assert trainer_ingress == {
+    ("ms-gym-api-gateway", (("TCP", 50051),)),
+    ("namespace:monitoring", (("TCP", 8080), ("TCP", 9090))),
+}, trainer_ingress
+assert trainer_egress == {
+    ("namespace:kube-system", (("UDP", 53), ("TCP", 53))),
+    ("ms-gym-identifier", (("TCP", 50051),)),
+    ("ms-gym-plans", (("TCP", 50051),)),
+    ("postgres", (("TCP", 5432),)),
+}, trainer_egress
 assert "Egress" in checkin_policy["spec"]["policyTypes"]
 assert "Egress" in payment_policy["spec"]["policyTypes"]
-assert all(selector != "kong" for selector, _ in member | plans | checkin_ingress), member | plans | checkin_ingress
-assert all(not (selector == "ms-gym-api-gateway" and ("TCP", 8080) in ports) for selector, ports in member | plans | checkin_ingress)
-assert all(("TCP", 9090) not in ports for _, ports in checkin_ingress | checkin_egress | payment_egress)
+assert "Egress" in trainer_policy["spec"]["policyTypes"]
+assert all(selector != "kong" for selector, _ in member | plans | checkin_ingress | trainer_ingress), member | plans | checkin_ingress | trainer_ingress
+assert all(not (selector == "ms-gym-api-gateway" and ("TCP", 8080) in ports) for selector, ports in member | plans | checkin_ingress | trainer_ingress)
+assert all(("TCP", 9090) not in ports for _, ports in checkin_ingress | checkin_egress | payment_egress | trainer_egress)
+assert all(selector not in {"kafka", "schema-registry", "ms-gym-payment", "ms-gym-notification", "ms-gym-analytics"} for selector, _ in trainer_egress)
 PY
 
-printf '%s\n' 'Member, Plans, Check-in, and Payment NetworkPolicy peer/port assertions passed.'
+printf '%s\n' 'Member, Plans, Check-in, Payment, and Trainer NetworkPolicy peer/port assertions passed.'

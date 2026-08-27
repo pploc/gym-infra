@@ -18,6 +18,7 @@ import (
 	checkinv1 "github.com/pploc/proto-go/checkin/v1"
 	memberv1 "github.com/pploc/proto-go/member/v1"
 	plansv1 "github.com/pploc/proto-go/plans/v1"
+	trainerv1 "github.com/pploc/proto-go/trainer/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -51,6 +52,8 @@ type config struct {
 	plansCA     string
 	checkinAddr string
 	checkinCA   string
+	trainerAddr string
+	trainerCA   string
 }
 
 func main() {
@@ -109,10 +112,18 @@ func newHandler(ctx context.Context, cfg config) (http.Handler, func(), error) {
 		_ = plansConn.Close()
 		return nil, nil, fmt.Errorf("dial Check-in: %w", err)
 	}
+	trainerConn, err := dial(ctx, cfg.trainerAddr, "ms-gym-trainer", cfg.trainerCA, cfg.gatewayCert, cfg.gatewayKey)
+	if err != nil {
+		_ = memberConn.Close()
+		_ = plansConn.Close()
+		_ = checkinConn.Close()
+		return nil, nil, fmt.Errorf("dial Trainer: %w", err)
+	}
 	closeConnections := func() {
 		_ = memberConn.Close()
 		_ = plansConn.Close()
 		_ = checkinConn.Close()
+		_ = trainerConn.Close()
 	}
 	mux := runtime.NewServeMux(
 		runtime.WithIncomingHeaderMatcher(rejectIncomingHeader),
@@ -130,6 +141,10 @@ func newHandler(ctx context.Context, cfg config) (http.Handler, func(), error) {
 	if err := checkinv1.RegisterCheckInServiceHandler(ctx, mux, checkinConn); err != nil {
 		closeConnections()
 		return nil, nil, fmt.Errorf("register Check-in: %w", err)
+	}
+	if err := trainerv1.RegisterTrainerServiceHandler(ctx, mux, trainerConn); err != nil {
+		closeConnections()
+		return nil, nil, fmt.Errorf("register Trainer: %w", err)
 	}
 	return mux, closeConnections, nil
 }
@@ -158,7 +173,8 @@ func loadConfig() (config, error) {
 		"TLS_CLIENT_KEY": cfg.gatewayKey, "MEMBER_GRPC_ADDR": cfg.memberAddr,
 		"MEMBER_GRPC_SERVER_CA": cfg.memberCA, "PLANS_GRPC_ADDR": cfg.plansAddr,
 		"PLANS_GRPC_SERVER_CA": cfg.plansCA, "CHECKIN_GRPC_ADDR": cfg.checkinAddr,
-		"CHECKIN_GRPC_SERVER_CA": cfg.checkinCA,
+		"CHECKIN_GRPC_SERVER_CA": cfg.checkinCA, "TRAINER_GRPC_ADDR": cfg.trainerAddr,
+		"TRAINER_GRPC_SERVER_CA": cfg.trainerCA,
 	} {
 		if value == "" {
 			return config{}, fmt.Errorf("%s is required", name)

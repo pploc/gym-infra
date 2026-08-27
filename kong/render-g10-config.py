@@ -16,8 +16,9 @@ SERVICE = {
     "member": "ms-gym-api-gateway",
     "plans": "ms-gym-api-gateway",
     "checkin": "ms-gym-api-gateway",
+    "trainer": "ms-gym-api-gateway",
 }
-EXPECTED = {"identity": 12, "member": 7, "plans": 8, "checkin": 6}
+EXPECTED = {"identity": 12, "member": 7, "plans": 8, "checkin": 6, "trainer": 8}
 ALLOWED_AUTH = {
     "public",
     "authenticated",
@@ -25,6 +26,7 @@ ALLOWED_AUTH = {
     "customer-self-or-super-admin",
     "customer-self-from-verified-sub",
     "customer-self",
+    "trainer-self-from-verified-sub",
 }
 CHECKIN_AUTH = Counter({"customer-self-from-verified-sub": 2, "super-admin-only": 4})
 FORBIDDEN_SELECTOR_TOKENS = {
@@ -35,6 +37,8 @@ FORBIDDEN_SELECTOR_TOKENS = {
     "ValidateMembership",
     "ValidateCheckInGym",
     "ListMembersByStatus",
+    "ValidateTrainerGym",
+    "ValidateTrainerAccount",
 }
 
 
@@ -122,7 +126,7 @@ def main() -> int:
 
     routes, protected = given_manifest_when_validated_then_return_routes(read(args.manifest))
     if args.verify_only:
-        print("G10 manifest parity verified: 33 exact routes (12 identity, 7 member, 8 plans, 6 checkin).")
+        print("G12 manifest parity verified: 41 exact routes (12 identity, 7 member, 8 plans, 6 checkin, 8 trainer).")
         return 0
 
     config = read(args.template)
@@ -151,7 +155,7 @@ def main() -> int:
     plugin = next(plugin for plugin in config["plugins"] if plugin["name"] == "gym-jwt-claims")
     plugin["config"]["protected_http_routes"] = protected
     args.output.write_text(yaml.safe_dump(config, sort_keys=False))
-    print("Rendered ignored G10 config with 33 exact routes to " + str(args.output))
+    print("Rendered G12 config with 41 exact routes to " + str(args.output))
     return 0
 
 

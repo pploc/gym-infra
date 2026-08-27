@@ -1,0 +1,147 @@
+# G12 profile/availability service. Browser traffic reaches generated gateway, then Trainer gRPC.
+nameOverride: ms-gym-trainer
+
+image:
+  repository: ghcr.io/pploc/ms-gym-trainer
+  tag: develop
+
+service:
+  type: ClusterIP
+  grpcPort: 50051
+  httpPort: 8080
+  metricsPort: 9090
+
+probes:
+  enabled: true
+  liveness:
+    path: /actuator/health/liveness
+    port: http
+  readiness:
+    path: /actuator/health/readiness
+    port: http
+  startup:
+    enabled: true
+    path: /actuator/health/liveness
+    port: http
+
+istio:
+  enabled: true
+  inject: true
+  gateway:
+    create: false
+    name: gym-gateway
+  virtualService:
+    enabled: false
+  destinationRule:
+    enabled: true
+    tlsMode: ISTIO_MUTUAL
+  peerAuthentication:
+    enabled: true
+    mtlsMode: STRICT
+
+ingress:
+  enabled: false
+
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-api-gateway
+      ports:
+        - protocol: TCP
+          port: 50051
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 9090
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-identifier
+      ports:
+        - protocol: TCP
+          port: 50051
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ms-gym-plans
+      ports:
+        - protocol: TCP
+          port: 50051
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+
+env:
+  - name: SPRING_DATASOURCE_URL
+    value: "jdbc:postgresql://postgres:5432/trainer_db"
+  - name: SPRING_DATASOURCE_USERNAME
+    value: "postgres"
+  - name: SPRING_DATASOURCE_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: ms-gym-trainer-secrets
+        key: db-password
+  - name: GRPC_SERVER_PORT
+    value: "50051"
+  - name: TRAINER_GRPC_TLS_ENABLED
+    value: "true"
+  - name: TRAINER_GRPC_ALLOW_PLAINTEXT
+    value: "false"
+  - name: TRAINER_GRPC_SERVER_CERT
+    value: "/var/run/certs/tls.crt"
+  - name: TRAINER_GRPC_SERVER_KEY
+    value: "/var/run/certs/tls.key"
+  - name: TRAINER_GRPC_CLIENT_CA
+    value: "/var/run/certs/ca.crt"
+  - name: IDENTIFIER_GRPC_ADDR
+    value: "ms-gym-identifier:50051"
+  - name: IDENTIFIER_GRPC_CLIENT_CERT
+    value: "/var/run/certs/tls.crt"
+  - name: IDENTIFIER_GRPC_CLIENT_KEY
+    value: "/var/run/certs/tls.key"
+  - name: IDENTIFIER_GRPC_SERVER_CA
+    value: "/var/run/certs/ca.crt"
+  - name: IDENTIFIER_GRPC_AUTHORITY
+    value: "ms-gym-identifier"
+  - name: PLANS_GRPC_ADDR
+    value: "ms-gym-plans:50051"
+  - name: PLANS_GRPC_CLIENT_CERT
+    value: "/var/run/certs/tls.crt"
+  - name: PLANS_GRPC_CLIENT_KEY
+    value: "/var/run/certs/tls.key"
+  - name: PLANS_GRPC_SERVER_CA
+    value: "/var/run/certs/ca.crt"
+  - name: PLANS_GRPC_AUTHORITY
+    value: "ms-gym-plans"
+
+volumeMounts:
+  - name: grpc-mtls
+    mountPath: /var/run/certs
+    readOnly: true
+
+volumes:
+  - name: grpc-mtls
+    secret:
+      secretName: ms-gym-trainer-grpc-mtls
